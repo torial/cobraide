@@ -1,7 +1,7 @@
 use Qios.DevSuite.Components
 use System.Windows.Forms from System.Windows.Forms
-use Alsing.SourceCode from "Alsing.SyntaxBox"
-use Alsing.Windows.Forms
+use ICSharpCode.TextEditor
+use ICSharpCode.TextEditor.Document
 use System.ComponentModel
 use System.Drawing
 use System.Diagnostics
@@ -13,7 +13,7 @@ class Project
     pro fileName from var = ""
     
     cue init
-        pass
+        base.init
     
     def save
         pass
@@ -21,9 +21,58 @@ class Project
     def load
         pass
 
+ 
+
+#Many changes inspired by TextEditor sample on CodeProject.  Including the Folding Strategy
+class CobraFoldingStrategy implements IFoldingStrategy
+    def generateFoldMarkers(document as IDocument, fileName as String?, parseInfo as Object?) as List<of FoldMarker>
+        result = List<of FoldMarker>()
+            
+        regionStartLines = Stack<of int>()
+        blockStartLines = Stack<of KeyValuePair<of int,int>>()
+        
+        currentLine = 0
+        for iLine in document.totalNumberOfLines
+            currentLine = iLine
+            seg = document.getLineSegment(iLine)
+            line = document.getText(seg)
+            trimmed = line.trim
+            currentIndent = line.length - trimmed.length
+
+            if trimmed.startsWith("#region")
+                regionStartLines.push(iLine)
+            else if trimmed.startsWith("#endregion") and regionStartLines.count > 0
+                start = regionStartLines.pop
+                result.add(FoldMarker(document,start,document.getLineSegment(start).length,iLine,currentIndent + "#endregion".length))
+            else if _isBlockScope(trimmed)
+                while blockStartLines.count > 0 and blockStartLines.peek.value >= currentIndent
+                    #we know there is another block with the same start, so go ahead and close it out.
+                    origStart = blockStartLines.pop
+                    kvp = _getPriorNonCommentNonBlankLine(document,iLine)
+                    endLine = kvp.key
+                    endText = kvp.value
+                    result.add(FoldMarker(document,origStart.key,document.getLineSegment(origStart.key).length, endLine,endText.length ))
+                
+                blockStartLines.push(KeyValuePair<of int,int>(iLine,line.length-trimmed.length))
+        
+       
+        return result
+
+    def _isBlockScope(l as String) as bool
+        return l.startsWith("cue ") or l.startsWith("def ") or l.startsWith("ensure") or l.startsWith("require") or l.startsWith("body") or l.startsWith("test") or l.startsWith("class ") or l.startsWith("namespace ")
+        
+    def _getPriorNonCommentNonBlankLine(document as IDocument, iLine as int) as KeyValuePair<of int,String>
+        post while iLine > 0 
+            iLine -=1
+            #TODO, support block comments /# #/
+            line = document.getText(document.getLineSegment(iLine))
+            trimmed = line.trim
+            if not trimmed.startsWith("#") and not trimmed.length == 0
+                return KeyValuePair<of int,String>(iLine,line)
+        return KeyValuePair<of int,String>(iLine,"")
+
 class Editor inherits Form
-    var _editor as SyntaxBoxControl #
-    var _syntaxDocument as SyntaxDocument #
+    var _editor as TextEditorControl #
     var _properties as PropertyGrid #
 
     #var _toolStrip as ToolStrip #
@@ -138,8 +187,9 @@ class Editor inherits Form
         qFillDock.show
         _tabs = QTabControl(parent=qFillDock,dock=DockStyle.Fill, name="_tabs")
         _tabEditor = QTabPage(text="Editor")
-        _syntaxDocument = SyntaxDocument(_components,maxUndoBufferSize=1000,modified=false,syntaxFile="Cobra.syn",undoStep=0)
-        _editor = SyntaxBoxControl(parent=_tabEditor, dock=DockStyle.Fill,name="_editor",width=480, document=_syntaxDocument)
+        _editor = TextEditorControl(parent=_tabEditor, dock=DockStyle.Fill,name="_editor",width=480)
+        _editor.document.foldingManager.foldingStrategy = CobraFoldingStrategy()
+        _editor.document.foldingManager.updateFoldings(nil,nil)
         
         _tabTest = QTabPage(text="Test")
         _tabConfig = QTabPage(text="Config")
@@ -332,8 +382,6 @@ class Editor inherits Form
 
     def menuNew_Click(sender, e as QMenuEventArgs)
         .saveChanges(false)
-        #_editor.document.parser.init(
-        _editor.document.text = ""
         
     def menuOpen_Click(sender, e as QMenuEventArgs)
         .saveChanges(false)
@@ -347,14 +395,26 @@ class Editor inherits Form
 
     def setEditorText(fileName as String)
         _tabEditor.text = "Editor - [System.IO.Path.getFileName(fileName)]"
-        text = System.IO.File.readAllLines(fileName)
+        _editor.loadFile(fileName)
         _editor.tag = fileName
-        _editor.document.lines = text #System.IO.File.readAllText(fileName)
+        #_editor.document.foldingManager.foldingStrategy = CobraFoldingStrategy()
+        _editor.document.foldingManager.updateFoldings(nil,nil)
     
+    def isModified(editor as TextEditorControl) as bool
+        return editor.parent.text.endsWith("*")
+        
+    def setModifiedFlag(editor as TextEditorControl, flag as bool)
+        isModified = .isModified(editor)
+        if isModified <> flag
+            p = editor.parent
+            if isModified
+                p.text = p.text.substring(0,p.text.length-1)
+            else
+                p.text +="*"
 
     def shouldSaveAnyChanges as bool
         """Returns true if changes should be changed.  Returns false if there are no changes, or user elects not to."""
-        if _editor.document.modified
+        if .isModified(_editor)
             return MessageBox.show("There are unsaved changes, would you like to save?","Save unsaved changes?",MessageBoxButtons.YesNo) == DialogResult.Yes
         return false
 
@@ -363,8 +423,8 @@ class Editor inherits Form
             if String.isNullOrEmpty(_editor.tag.toString)
                 _editor.tag = .promptForSaveFileName
             if not String.isNullOrEmpty(_editor.tag.toString)
-                System.IO.File.writeAllText(_editor.tag.toString, _editor.document.text)
-                _editor.document.saveRevisionMark
+                _editor.saveFile(_editor.fileName)
+                .setModifiedFlag(_editor,false)
 
     
     def promptForSaveFileName as String
