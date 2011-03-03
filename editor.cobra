@@ -1,0 +1,404 @@
+use Qios.DevSuite.Components
+use System.Windows.Forms from System.Windows.Forms
+use Alsing.SourceCode from "Alsing.SyntaxBox"
+use Alsing.Windows.Forms
+use System.ComponentModel
+use System.Drawing
+use System.Diagnostics
+
+class Project
+    pro references from var = List<of String>()
+    pro files from var = List<of String>()
+    pro name from var = "New Project"
+    pro fileName from var = ""
+    
+    cue init
+        pass
+    
+    def save
+        pass
+        
+    def load
+        pass
+
+class Editor inherits Form
+    var _editor as SyntaxBoxControl #
+    var _syntaxDocument as SyntaxDocument #
+    var _properties as PropertyGrid #
+
+    #var _toolStrip as ToolStrip #
+    var _menuStrip as QMainMenu #
+    var _menuFile as QMenuItem #
+    var _menuFileProject as QMenuItem
+    var _menuFileProjectSave as QMenuItem #
+    var _menuFileProjectSaveAs as QMenuItem #
+    var _menuFileProjectOpen as QMenuItem #
+    var _menuFileProjectNew as QMenuItem #
+    var _menuFileFile as QMenuItem
+    var _menuFileSave as QMenuItem #
+    var _menuFileSaveAs as QMenuItem #
+    var _menuFileQuit as QMenuItem #
+    var _menuFileOpen as QMenuItem #
+    var _menuFileNew as QMenuItem #
+    var _menuCompile as QMenuItem #
+    var _menuCompileBuild as QMenuItem #
+    var _menuCompileTest as QMenuItem #
+    var _menuCompileObjectExplorer as QMenuItem #
+    var _menuCompileRun as QMenuItem #
+   
+    var _contextMenu as QContextMenu
+   
+    var _lblOut as Label
+    var _lblOutput as RichTextBox
+    
+    var _bottomDock as QDockBar
+    var _rightDock as QDockBar
+    var _leftDock as QDockBar
+    var _ioWindow as QDockingWindow
+    
+    var _projectTree as TreeView
+    var _files as TreeNode
+    var _references as TreeNode
+    var _itemProperties as PropertyGrid
+   
+    var _tabs as QTabControl #
+    var _tabEditor as QTabPage #
+    var _tabTest as QTabPage  #
+    var _tabConfig as QTabPage #
+    
+    var _components as System.ComponentModel.IContainer? #
+    
+    
+    #region test
+    cue init
+        base.init
+        .text = "Cobra Editor"
+        .width = 800
+        .height = 600
+        .isMdiContainer = true
+        _components = System.ComponentModel.Container()
+        .initializeDockBars
+        .initializeTabs
+        #.initializeToolbar
+        .initializeMenus
+    #endregion
+    
+    def dispose(disposing as bool) is override, protected
+        if disposing and _components is not nil
+            _components.dispose
+        base.dispose(disposing)
+
+
+    def initializeDockBars
+        _rightDock = QDockBar(parent=this,name="_rightDock",dock=DockStyle.Right)
+        projectWindow = QDockingWindow(name="projectWindow",dock=DockStyle.Top,width=200,height=400,text="Solution Explorer")
+        projectWindow.owner = this
+        #projectWindow.windowGroupName = "Projects"
+        _projectTree = TreeView(parent=projectWindow,dock=DockStyle.Fill,name="_projectTree")
+        sln = TreeNode(name="Solution",text="Solution")
+        _projectTree.nodes.add(sln)
+        pj = TreeNode(name="Project",text="Project")
+        sln.nodes.add(pj)
+        references = TreeNode(name="References",text="References")
+        pj.nodes.add(references)
+        _references = references
+        references.nodes.add(TreeNode(name="DEFAULT:mscorlib.dll",text="mscorlib.dll"))
+        references.nodes.add(TreeNode(name="DEFAULT:System.dll",text="System.dll"))
+        references.nodes.add(TreeNode(name="DEFAULT:Cobra.Lang",text="Cobra.Lang"))
+        files = TreeNode(name="Files",text="Files")
+        pj.nodes.add(files)
+        _files = files
+        _files.expand
+        _references.expand
+        
+        propertiesWindow = QDockingWindow(name="propertiesWindow",dock=DockStyle.Bottom,width=200, text="Properties")
+        propertiesWindow.canDockOnOtherControlBottom = true
+        propertiesWindow.owner = this
+        propertiesWindow.dockWindow(_rightDock)
+        #projectWindow.dockWindow(_rightDock)
+        projectWindow.dockWindow(propertiesWindow,QDockOrientation.Vertical,false)
+        #propertiesWindow.windowGroupName = "Projects"
+        _itemProperties = PropertyGrid(parent=propertiesWindow,dock=DockStyle.Fill,name="_itemProperties")
+        _itemProperties.selectedObject = projectWindow
+        _leftDock = QDockBar(parent=this,name="_leftDock",dock=DockStyle.Left)
+        _bottomDock = QDockBar(parent=this,name="_bottomDock",dock=DockStyle.Bottom)
+        _ioWindow = ioWindow = QDockingWindow(name="IO",dock=DockStyle.Fill,height=200,text="I/O")
+        ioWindow.owner = this
+        ioWindow.dockWindow(_bottomDock)
+        ioWindow.slideWindow(true,false)
+        _lblOutput = RichTextBox(parent=ioWindow, dock=DockStyle.Top,name="_lblOutput",autoSize=false,backColor=Color.white, borderStyle = System.Windows.Forms.BorderStyle.FixedSingle, height=400,readOnly=true)
+        _lblOut = Label(parent=ioWindow, dock=DockStyle.Top,name="_lblOut",autoSize=true,text="Output:")
+        
+        
+ 
+    def initializeTabs
+        qFillDock = Form(dock=DockStyle.Fill,name="qFillDock")
+        qFillDock.mdiParent = this
+        qFillDock.windowState = FormWindowState.Maximized
+        qFillDock.show
+        _tabs = QTabControl(parent=qFillDock,dock=DockStyle.Fill, name="_tabs")
+        _tabEditor = QTabPage(text="Editor")
+        _syntaxDocument = SyntaxDocument(_components,maxUndoBufferSize=1000,modified=false,syntaxFile="Cobra.syn",undoStep=0)
+        _editor = SyntaxBoxControl(parent=_tabEditor, dock=DockStyle.Fill,name="_editor",width=480, document=_syntaxDocument)
+        
+        _tabTest = QTabPage(text="Test")
+        _tabConfig = QTabPage(text="Config")
+        _properties = PropertyGrid(parent=_tabConfig,dock=DockStyle.Right,name="_properties",selectedObject=_editor,width=300)
+        _tabs.controls.add(_tabEditor)
+        _tabs.controls.add(_tabTest)
+        _tabs.controls.add(_tabConfig)
+
+    def initializeToolbar
+        pass #_toolStrip = ToolStrip(parent=this,name="_toolStrip",dock=DockStyle.Top)
+    def initializeMenus
+        _menuStrip = QMainMenu(parent=this,name="_menuStrip",dock=DockStyle.Top)
+        
+        #File Menu
+        _menuFile = QMenuItem(itemName="_menuFile",title="File")
+        _menuFileFile = QMenuItem(itemName="_menuFileFile",title="File")
+        _menuFileProject = QMenuItem(itemName="_menuFileProject",title="Project")
+        
+        _menuFileProjectSave = QMenuItem(itemName="_menuFileProjectSave",title="Save")
+        listen _menuFileProjectSave.menuItemActivated, ref .menuFileProjectSave_Click
+        
+        _menuFileProjectSaveAs = QMenuItem(itemName="_menuFileProjectSaveAs",title="Save As")
+        listen _menuFileProjectSaveAs.menuItemActivated, ref .menuFileProjectSaveAs_Click
+        
+        _menuFileProjectOpen = QMenuItem(itemName="_menuFileProjectOpen",title="Open")
+        listen _menuFileProjectOpen.menuItemActivated, ref .menuFileProjectOpen_Click
+        
+        _menuFileProjectNew = QMenuItem(itemName="_menuFileProjectNew",title="New")
+        listen _menuFileProjectNew.menuItemActivated, ref .menuFileProjectNew_Click
+        
+        _menuFileQuit = QMenuItem(itemName="_menuFileQuit",title="&Quit",shortcut=Shortcut.CtrlQ)
+        listen _menuFileQuit.menuItemActivated, ref .menuQuit_Click
+        
+        _menuFileOpen = QMenuItem(itemName="_menuFileOpen",title="&Open",shortcut=Shortcut.CtrlO)
+        listen _menuFileOpen.menuItemActivated, ref .menuOpen_Click
+        
+        _menuFileNew = QMenuItem(itemName="_menuFileNew", title="&New",shortcut=Shortcut.CtrlN)
+        listen _menuFileNew.menuItemActivated, ref .menuNew_Click
+
+        _menuFileSaveAs = QMenuItem(itemName="_menuFileSaveAs", title="Save &As",shortcut=Shortcut.CtrlShiftS)
+        listen _menuFileSaveAs.menuItemActivated, ref .menuSaveAs_Click
+        
+        _menuFileSave = QMenuItem(itemName="_menuFileSave", title="&Save",shortcut=Shortcut.CtrlS)
+        listen _menuFileSave.menuItemActivated, ref .menuSave_Click
+
+        #Compile Menu
+        _menuCompile = QMenuItem(itemName="_menuCompile",title="Compile")
+        listen _menuCompile.menuItemActivated, ref .menuCompile_Click
+        
+        _menuCompileBuild = QMenuItem(itemName="_menuCompileBuild",title="&Build",shortcut=Shortcut.CtrlB)
+        listen _menuCompileBuild.menuItemActivated, ref .menuCompileBuild_Click
+        
+        _menuCompileTest = QMenuItem(itemName="_menuCompileTest",title="&Test",shortcut=Shortcut.CtrlT)
+        listen _menuCompileTest.menuItemActivated, ref .menuCompileTest_Click
+        
+        _menuCompileObjectExplorer = QMenuItem(itemName="_menuCompileObjectExplorer",title="Object &Explorer",shortcut=Shortcut.CtrlE)
+        listen _menuCompileObjectExplorer.menuItemActivated, ref .menuCompileObjectExplorer_Click
+        
+        _menuCompileRun = QMenuItem(itemName="_menuCompileRun",title="&Run",shortcut=Shortcut.F5)
+        listen _menuCompileRun.menuItemActivated, ref .menuCompileRun_Click
+
+        _menuFileProject.menuItems.add(_menuFileProjectNew)
+        _menuFileProject.menuItems.add(_menuFileProjectOpen)
+        _menuFileProject.menuItems.add(_menuFileProjectSave)
+        _menuFileProject.menuItems.add(_menuFileProjectSaveAs)
+        _menuFileFile.menuItems.add(_menuFileNew)
+        _menuFileFile.menuItems.add(_menuFileOpen)
+        _menuFileFile.menuItems.add(_menuFileSave)
+        _menuFileFile.menuItems.add(_menuFileSaveAs)
+        _menuFile.menuItems.add(_menuFileProject)
+        _menuFile.menuItems.add(_menuFileFile)
+        _menuFile.menuItems.add(_menuFileQuit)
+
+        _menuCompile.menuItems.add(_menuCompileBuild)
+        _menuCompile.menuItems.add(_menuCompileTest)
+        _menuCompile.menuItems.add(_menuCompileObjectExplorer)
+        _menuCompile.menuItems.add(_menuCompileRun)
+
+        _menuStrip.menuItems.add(_menuFile)
+        _menuStrip.menuItems.add(_menuCompile)
+        
+        
+        _contextMenu = QContextMenu(_components)
+        mnuAddFile = QMenuItem()
+        mnuAddFile.itemName = "mnuAddFile"
+        mnuAddFile.title = "Add Existing File"
+        mnuAddFile.toolTip = "Add existing file to the project."
+        _contextMenu.menuItems.add(mnuAddFile)
+        
+        mnuNewFile = QMenuItem()
+        mnuNewFile.itemName = "mnuNewFile"
+        mnuNewFile.title = "Add New File"
+        mnuNewFile.toolTip = "Add a new source file to the project."
+        
+        _contextMenu.menuItems.add(mnuNewFile)
+        listen _contextMenu.menuItemSelected, ref .contextMenu_MenuItemSelected
+        
+        _contextMenu.addListener(_projectTree)
+        
+    def contextMenu_MenuItemSelected(sender, e as QMenuEventArgs)
+        if e.menuItem is nil or e.menuItem.isSeparator, return
+        item = e.menuItem
+        #TODO: Add logic to handle the particular nodes available.
+        if item.itemName == "mnuAddFile"
+            pass
+        else if item.itemName == "mnuNewFile"
+            pass
+        
+    def menuCompile_Click(sender, e as QMenuEventArgs)
+        _menuCompileBuild.enabled = _p is nil
+        _menuCompileTest.enabled = _p is nil
+        _menuCompileObjectExplorer.enabled = _p is nil
+        _menuCompileRun.enabled = _p is nil
+        
+    def menuCompileBuild_Click(sender, e as QMenuEventArgs)
+        .runCobraProcess(" -c -turbo ")
+    def menuCompileTest_Click(sender, e as QMenuEventArgs)
+        .runCobraProcess(" -test ")
+    def menuCompileObjectExplorer_Click(sender, e as QMenuEventArgs)
+        .runCobraProcess("")
+    def menuCompileRun_Click(sender, e as QMenuEventArgs)
+        .runCobraProcess(" ")
+        
+    var _p as Process?
+    def runCobraProcess(args as  String)
+        if _p is not nil, return #can't run a second compile process!
+        _p = p = Process()
+        _ioWindow.slideWindow(false,true)
+        _ioWindow.swapDockMode
+        p.startInfo.useShellExecute = false
+        p.startInfo.redirectStandardOutput = true
+        p.startInfo.redirectStandardError = true
+        p.startInfo.fileName = r"C:\Cobra\bin\cobra.bat"
+        p.enableRaisingEvents = true
+        p.startInfo.arguments = args + " [_editor.tag.toString]"
+        .logIO(p.startInfo.fileName + " " + p.startInfo.arguments,Color.blue)
+        listen p.outputDataReceived, ref .outputDataReceived
+        listen p.errorDataReceived, ref .errorDataReceived
+        listen p.exited, ref .processExited
+        p.start
+        p.beginErrorReadLine
+        p.beginOutputReadLine
+    
+    def outputDataReceived(sender, e as DataReceivedEventArgs)
+        .logIO(e.data,Color.black)
+        
+    def errorDataReceived(sender, e as DataReceivedEventArgs)
+        .logIO(e.data,Color.maroon)
+        
+    def logIO(msg as String?, color as Color)
+        if msg is nil, return
+        start = _lblOutput.textLength
+        _lblOutput.appendText(msg)
+        enda = _lblOutput.textLength
+        _lblOutput.select(start,enda-start)
+        _lblOutput.selectionColor = color
+        _lblOutput.selectionLength=0
+        _lblOutput.appendText("\r\n")
+        
+    def processExited(sender, e as EventArgs)
+        .logIO("Process Exited\r\n",Color.black)
+        ignore _p.outputDataReceived, ref .outputDataReceived
+        ignore _p.errorDataReceived, ref .errorDataReceived
+        ignore _p.exited, ref .processExited
+        _ioWindow.swapDockMode
+        _ioWindow.slideWindow(true,true)
+        _p = nil
+
+    def menuFileProjectSave_Click(sender, e as QMenuEventArgs)
+        pass
+        
+    def menuFileProjectSaveAs_Click(sender, e as QMenuEventArgs)
+        pass
+        
+    def menuFileProjectOpen_Click(sender, e as QMenuEventArgs)
+        pass
+        
+    def menuFileProjectNew_Click(sender, e as QMenuEventArgs)
+        pass
+
+
+
+    def menuSaveAs_Click(sender, e as QMenuEventArgs)
+        _editor.tag = ""    
+        .saveChanges(true)
+        _tabEditor.text = "Editor - [System.IO.Path.getFileName(_editor.tag.toString)]"
+
+    def menuSave_Click(sender, e as QMenuEventArgs)
+        .saveChanges(true) 
+
+    def menuNew_Click(sender, e as QMenuEventArgs)
+        .saveChanges(false)
+        #_editor.document.parser.init(
+        _editor.document.text = ""
+        
+    def menuOpen_Click(sender, e as QMenuEventArgs)
+        .saveChanges(false)
+        fileName = .promptForOpenFileName
+        if fileName <> ""
+            .setEditorText(fileName)
+        
+    def menuQuit_Click(sender, e as QMenuEventArgs)
+        .saveChanges(false)
+        Application.exit
+
+    def setEditorText(fileName as String)
+        _tabEditor.text = "Editor - [System.IO.Path.getFileName(fileName)]"
+        text = System.IO.File.readAllLines(fileName)
+        _editor.tag = fileName
+        _editor.document.lines = text #System.IO.File.readAllText(fileName)
+    
+
+    def shouldSaveAnyChanges as bool
+        """Returns true if changes should be changed.  Returns false if there are no changes, or user elects not to."""
+        if _editor.document.modified
+            return MessageBox.show("There are unsaved changes, would you like to save?","Save unsaved changes?",MessageBoxButtons.YesNo) == DialogResult.Yes
+        return false
+
+    def saveChanges(forceSave as bool)
+        if .shouldSaveAnyChanges or forceSave
+            if String.isNullOrEmpty(_editor.tag.toString)
+                _editor.tag = .promptForSaveFileName
+            if not String.isNullOrEmpty(_editor.tag.toString)
+                System.IO.File.writeAllText(_editor.tag.toString, _editor.document.text)
+                _editor.document.saveRevisionMark
+
+    
+    def promptForSaveFileName as String
+        dlg = SaveFileDialog()
+        dlg.filter = "Cobra files|*.cobra"
+        dlg.filterIndex = 1
+        if dlg.showDialog == DialogResult.OK
+            return dlg.fileName ? ""
+        return ""            
+    
+    def promptForOpenFileName as String
+        dlg = OpenFileDialog()
+        dlg.filter = "Cobra files|*.cobra"
+        dlg.filterIndex = 1
+        if dlg.showDialog == DialogResult.OK
+            return dlg.fileName ? ""
+        return ""            
+
+
+enum CompilerValue
+    NotSet
+    Set
+    HasValue
+
+enum BackEnd
+    None
+    CLR
+    JVM
+    ObjC
+    
+
+
+class Program
+
+    def main is shared
+        has STAThread
+        Application.run(Editor())
