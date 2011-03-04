@@ -21,25 +21,45 @@ class Project
     def load
         pass
 
- 
+class FindAndReplaceForm inherits Form
+    def showFor(editor as TextEditorControl, isReplacing as bool)
+        pass
+    def findNext(unknown as bool, isReverse as bool, errMsg as String)
+        pass
+    
+    pro lookFor from var= ""
+    
 
 #Many changes inspired by TextEditor sample on CodeProject.  Including the Folding Strategy
 class CobraFoldingStrategy implements IFoldingStrategy
     def generateFoldMarkers(document as IDocument, fileName as String?, parseInfo as Object?) as List<of FoldMarker>
         result = List<of FoldMarker>()
             
+        blockCommentStartLines = Stack<of int>()
         regionStartLines = Stack<of int>()
         blockStartLines = Stack<of KeyValuePair<of int,int>>()
         
-        currentLine = 0
+        inBlockComment = false
+        
         for iLine in document.totalNumberOfLines
-            currentLine = iLine
             seg = document.getLineSegment(iLine)
             line = document.getText(seg)
             trimmed = line.trim
             currentIndent = line.length - trimmed.length
-
-            if trimmed.startsWith("#region")
+            
+            #The block comment WILL fail in the following scenarios:
+            #    #/    /# some stuff... a few lines #/
+            if trimmed.contains("/#") and not trimmed.startsWith("#")
+                inBlockComment = true
+                blockCommentStartLines.push(iLine)
+            if trimmed.contains("#/") and inBlockComment and blockCommentStartLines.count > 0
+                inBlockComment = false
+                blockStart = blockCommentStartLines.pop
+                result.add(FoldMarker(document,blockStart,document.getText(document.getLineSegment(blockStart)).indexOf("/#"),iLine,currentIndent + "#/".length))
+                
+            else if inBlockComment
+                continue #skip over all logic until an end comment is found.
+            else if trimmed.startsWith("#region")
                 regionStartLines.push(iLine)
             else if trimmed.startsWith("#endregion") and regionStartLines.count > 0
                 start = regionStartLines.pop
@@ -55,6 +75,13 @@ class CobraFoldingStrategy implements IFoldingStrategy
                 
                 blockStartLines.push(KeyValuePair<of int,int>(iLine,line.length-trimmed.length))
         
+        #close out any unmatched folds
+        while blockStartLines.count > 0 
+            origStart = blockStartLines.pop
+            kvp = _getPriorNonCommentNonBlankLine(document,iLine)
+            endLine = kvp.key
+            endText = kvp.value
+            result.add(FoldMarker(document,origStart.key,document.getLineSegment(origStart.key).length, endLine,endText.length ))
        
         return result
 
@@ -72,7 +99,9 @@ class CobraFoldingStrategy implements IFoldingStrategy
         return KeyValuePair<of int,String>(iLine,"")
 
 class Editor inherits Form
-    var _editor as TextEditorControl #
+    var _editorSettings as ITextEditorProperties?
+    var _findForm = FindAndReplaceForm()
+    
     var _properties as PropertyGrid #
 
     #var _toolStrip as ToolStrip #
@@ -87,6 +116,7 @@ class Editor inherits Form
     var _menuFileSave as QMenuItem #
     var _menuFileSaveAs as QMenuItem #
     var _menuFileQuit as QMenuItem #
+    var _menuFileClose as QMenuItem
     var _menuFileOpen as QMenuItem #
     var _menuFileNew as QMenuItem #
     var _menuCompile as QMenuItem #
@@ -111,12 +141,20 @@ class Editor inherits Form
     var _itemProperties as PropertyGrid
    
     var _tabs as QTabControl #
-    var _tabEditor as QTabPage #
     var _tabTest as QTabPage  #
     var _tabConfig as QTabPage #
     
     var _components as System.ComponentModel.IContainer? #
     
+    get _allEditors as TextEditorControl*
+        for tab in _tabs.controls
+            for ctrl in tab.controls
+                if ctrl.typeOf is TextEditorControl
+                    yield ctrl to TextEditorControl
+    
+    def _activeEditor as TextEditorControl?
+        if _tabs.controls.count == 0, return nil
+        return _tabs.activeTabPage.controls[0] to TextEditorControl?
     
     #region test
     cue init
@@ -126,6 +164,7 @@ class Editor inherits Form
         .height = 600
         .isMdiContainer = true
         _components = System.ComponentModel.Container()
+        listen .formClosing, ref _formClosing
         .initializeDockBars
         .initializeTabs
         #.initializeToolbar
@@ -159,6 +198,8 @@ class Editor inherits Form
         _files = files
         _files.expand
         _references.expand
+        sln.expand
+        pj.expand
         
         propertiesWindow = QDockingWindow(name="propertiesWindow",dock=DockStyle.Bottom,width=200, text="Properties")
         propertiesWindow.canDockOnOtherControlBottom = true
@@ -178,7 +219,46 @@ class Editor inherits Form
         _lblOutput = RichTextBox(parent=ioWindow, dock=DockStyle.Top,name="_lblOutput",autoSize=false,backColor=Color.white, borderStyle = System.Windows.Forms.BorderStyle.FixedSingle, height=400,readOnly=true)
         _lblOut = Label(parent=ioWindow, dock=DockStyle.Top,name="_lblOut",autoSize=true,text="Output:")
         
+    def _addNewEditor(title as String) as TextEditorControl
+        tabEditor = QTabPage(text=title)
+        _tabs.controls.add(tabEditor)
+        editor = TextEditorControl(parent=tabEditor, dock=DockStyle.Fill,name="editor",width=480)
+        editor.document.foldingManager.foldingStrategy = CobraFoldingStrategy()
+        editor.document.foldingManager.updateFoldings(nil,nil)
+        listen editor.document.documentChanged, ref _documentChanged
+        listen tabEditor.enter, ref _documentTabEntered
+        listen editor.activeTextAreaControl.textArea.keyDown, ref _keyDown
+        if _editorSettings is nil
+            _editorSettings = editor.textEditorProperties
+            .onSettingsChanged
+        else
+            editor.textEditorProperties = _editorSettings
+        return editor
         
+    def onSettingsChanged
+        pass
+    
+    def _keyDown(sender, e as KeyEventArgs)
+        #simple logic to just require Ctrl + <space>
+        if not e.control, return
+        if not e.keyCode <> Keys.Space, return
+        e.suppressKeyPress = true
+        _showIntellisense(e.keyValue to char)
+        
+    def _showIntellisense(value as char)
+        pass #TODO : ADD INTELLISENSE
+/#
+	        ICompletionDataProvider completionDataProvider = new CodeCompletionDataProvider();
+	        CodeCompletionWindow window = CodeCompletionWindow.ShowCompletionWindow(this, ActiveEditor, "",
+	                                                                                completionDataProvider, value);
+#/
+
+    def _documentTabEntered(sender, e as EventArgs)
+        page = sender to QTabPage
+        page.controls[0].focus
+ 
+    def _documentChanged(sender, e as DocumentEventArgs)
+        .setModifiedFlag(_activeEditor,true)
  
     def initializeTabs
         qFillDock = Form(dock=DockStyle.Fill,name="qFillDock")
@@ -186,15 +266,10 @@ class Editor inherits Form
         qFillDock.windowState = FormWindowState.Maximized
         qFillDock.show
         _tabs = QTabControl(parent=qFillDock,dock=DockStyle.Fill, name="_tabs")
-        _tabEditor = QTabPage(text="Editor")
-        _editor = TextEditorControl(parent=_tabEditor, dock=DockStyle.Fill,name="_editor",width=480)
-        _editor.document.foldingManager.foldingStrategy = CobraFoldingStrategy()
-        _editor.document.foldingManager.updateFoldings(nil,nil)
-        
+        _addNewEditor("New file")
         _tabTest = QTabPage(text="Test")
         _tabConfig = QTabPage(text="Config")
-        _properties = PropertyGrid(parent=_tabConfig,dock=DockStyle.Right,name="_properties",selectedObject=_editor,width=300)
-        _tabs.controls.add(_tabEditor)
+        _properties = PropertyGrid(parent=_tabConfig,dock=DockStyle.Right,name="_properties",selectedObject=_projectTree,width=300)
         _tabs.controls.add(_tabTest)
         _tabs.controls.add(_tabConfig)
 
@@ -222,7 +297,11 @@ class Editor inherits Form
         
         _menuFileQuit = QMenuItem(itemName="_menuFileQuit",title="&Quit",shortcut=Shortcut.CtrlQ)
         listen _menuFileQuit.menuItemActivated, ref .menuQuit_Click
-        
+
+        _menuFileClose = QMenuItem(itemName="_menuFileClose",title="C&lose",shortcut=Shortcut.CtrlW)
+        listen _menuFileClose.menuItemActivated, ref .menuClose_Click
+
+
         _menuFileOpen = QMenuItem(itemName="_menuFileOpen",title="&Open",shortcut=Shortcut.CtrlO)
         listen _menuFileOpen.menuItemActivated, ref .menuOpen_Click
         
@@ -235,6 +314,67 @@ class Editor inherits Form
         _menuFileSave = QMenuItem(itemName="_menuFileSave", title="&Save",shortcut=Shortcut.CtrlS)
         listen _menuFileSave.menuItemActivated, ref .menuSave_Click
 
+        _menuFileProject.menuItems.add(_menuFileProjectNew)
+        _menuFileProject.menuItems.add(_menuFileProjectOpen)
+        _menuFileProject.menuItems.add(_menuFileProjectSave)
+        _menuFileProject.menuItems.add(_menuFileProjectSaveAs)
+        _menuFileFile.menuItems.add(_menuFileNew)
+        _menuFileFile.menuItems.add(_menuFileOpen)
+        _menuFileFile.menuItems.add(_menuFileSave)
+        _menuFileFile.menuItems.add(_menuFileSaveAs)
+        _menuFile.menuItems.add(_menuFileProject)
+        _menuFile.menuItems.add(_menuFileFile)
+        _menuFile.menuItems.add(_menuFileQuit)
+
+
+        ##################################################################
+        #Edit Menu
+        menuEdit = QMenuItem(itemName="_menuEdit",title="Edit")
+        
+        menuEditCut = QMenuItem(itemName="_menuEditCut",title="Cut",shortcut=Shortcut.CtrlX)
+        listen menuEditCut.menuItemActivated, ref .menuEditCut_Click
+        menuEditCopy = QMenuItem(itemName="_menuEditCopy",title="Copy",shortcut=Shortcut.CtrlC)
+        listen menuEditCopy.menuItemActivated, ref .menuEditCopy_Click
+        menuEditPaste = QMenuItem(itemName="_menuEditPaste",title="Paste",shortcut=Shortcut.CtrlV)
+        listen menuEditPaste.menuItemActivated, ref .menuEditPaste_Click
+        menuEditDelete = QMenuItem(itemName="_menuEditDelete",title="Delete")
+        listen menuEditDelete.menuItemActivated, ref .menuEditDelete_Click
+        menuEditFind = QMenuItem(itemName="_menuEditFind",title="Find",shortcut=Shortcut.CtrlF)
+        listen menuEditFind.menuItemActivated, ref .menuEditFind_Click
+        menuEditReplace = QMenuItem(itemName="_menuEditReplace",title="Replace",shortcut=Shortcut.CtrlH)
+        listen menuEditReplace.menuItemActivated, ref .menuEditReplace_Click
+        menuEditFindAgain = QMenuItem(itemName="_menuEditFindAgain",title="Find Again",shortcut=Shortcut.F3)
+        listen menuEditFindAgain.menuItemActivated, ref .menuEditFindAgain_Click
+        menuEditFindAgainReverse = QMenuItem(itemName="_menuEditFindAgainReverse",title="Find Again Reverse")
+        listen menuEditFindAgainReverse.menuItemActivated, ref .menuEditFindAgainReverse_Click
+
+        menuEditFindAndReplace = QMenuItem(itemName="_menuEditFindAndReplace",title="Find And Replace")
+        menuEditFindAndReplace.menuItems.add(menuEditFind)
+        menuEditFindAndReplace.menuItems.add(menuEditReplace)
+        menuEditFindAndReplace.menuItems.add(menuEditFindAgain)
+        menuEditFindAndReplace.menuItems.add(menuEditFindAgainReverse)
+
+        
+        menuEditToggleBookmark = QMenuItem(itemName="_menuEditToggleBookmark",title="Toggle Bookmark")
+        listen menuEditToggleBookmark.menuItemActivated, ref .menuEditToggleBookmark_Click
+        menuEditGoToNextBookmark = QMenuItem(itemName="_menuEditGoToNextBookmark",title="Go To Next Bookmark")
+        listen menuEditGoToNextBookmark.menuItemActivated, ref .menuEditGoToNextBookmark_Click
+        menuEditGoToPrevBookmark = QMenuItem(itemName="_menuEditGoToPreviousBookmark",title="Go To Previous Bookmark")
+        listen menuEditGoToPrevBookmark.menuItemActivated, ref .menuEditGoToPrevBookmark_Click
+
+        menuEditBooksmarks = QMenuItem(itemName="_menuEditBookmarks",title="Bookmarks")
+        menuEditBooksmarks.menuItems.add(menuEditToggleBookmark)
+        menuEditBooksmarks.menuItems.add(menuEditGoToNextBookmark)
+        menuEditBooksmarks.menuItems.add(menuEditGoToPrevBookmark)
+        
+        menuEdit.menuItems.add(menuEditCut)
+        menuEdit.menuItems.add(menuEditCopy)
+        menuEdit.menuItems.add(menuEditPaste)
+        menuEdit.menuItems.add(menuEditDelete)
+        menuEdit.menuItems.add(menuEditFindAndReplace)
+        menuEdit.menuItems.add(menuEditBooksmarks)
+
+        #####################################################################
         #Compile Menu
         _menuCompile = QMenuItem(itemName="_menuCompile",title="Compile")
         listen _menuCompile.menuItemActivated, ref .menuCompile_Click
@@ -251,24 +391,13 @@ class Editor inherits Form
         _menuCompileRun = QMenuItem(itemName="_menuCompileRun",title="&Run",shortcut=Shortcut.F5)
         listen _menuCompileRun.menuItemActivated, ref .menuCompileRun_Click
 
-        _menuFileProject.menuItems.add(_menuFileProjectNew)
-        _menuFileProject.menuItems.add(_menuFileProjectOpen)
-        _menuFileProject.menuItems.add(_menuFileProjectSave)
-        _menuFileProject.menuItems.add(_menuFileProjectSaveAs)
-        _menuFileFile.menuItems.add(_menuFileNew)
-        _menuFileFile.menuItems.add(_menuFileOpen)
-        _menuFileFile.menuItems.add(_menuFileSave)
-        _menuFileFile.menuItems.add(_menuFileSaveAs)
-        _menuFile.menuItems.add(_menuFileProject)
-        _menuFile.menuItems.add(_menuFileFile)
-        _menuFile.menuItems.add(_menuFileQuit)
-
         _menuCompile.menuItems.add(_menuCompileBuild)
         _menuCompile.menuItems.add(_menuCompileTest)
         _menuCompile.menuItems.add(_menuCompileObjectExplorer)
         _menuCompile.menuItems.add(_menuCompileRun)
 
         _menuStrip.menuItems.add(_menuFile)
+        _menuStrip.menuItems.add(menuEdit)
         _menuStrip.menuItems.add(_menuCompile)
         
         
@@ -324,7 +453,7 @@ class Editor inherits Form
         p.startInfo.redirectStandardError = true
         p.startInfo.fileName = r"C:\Cobra\bin\cobra.bat"
         p.enableRaisingEvents = true
-        p.startInfo.arguments = args + " [_editor.tag.toString]"
+        p.startInfo.arguments = args + " [_activeEditor.fileName]"
         .logIO(p.startInfo.fileName + " " + p.startInfo.arguments,Color.blue)
         listen p.outputDataReceived, ref .outputDataReceived
         listen p.errorDataReceived, ref .errorDataReceived
@@ -373,38 +502,63 @@ class Editor inherits Form
 
 
     def menuSaveAs_Click(sender, e as QMenuEventArgs)
-        _editor.tag = ""    
-        .saveChanges(true)
-        _tabEditor.text = "Editor - [System.IO.Path.getFileName(_editor.tag.toString)]"
+        if _activeEditor is not nil
+            .saveAsChanges(_activeEditor to !)
 
     def menuSave_Click(sender, e as QMenuEventArgs)
-        .saveChanges(true) 
+        editor = _activeEditor
+        if editor is not nil
+            .saveChanges(editor)
 
     def menuNew_Click(sender, e as QMenuEventArgs)
-        .saveChanges(false)
+        _addNewEditor("New file")
         
     def menuOpen_Click(sender, e as QMenuEventArgs)
-        .saveChanges(false)
         fileName = .promptForOpenFileName
         if fileName <> ""
             .setEditorText(fileName)
-        
+            
+            if _activeEditor is not nil and _activeEditor.document.textLength and String.isNullOrEmpty(_activeEditor.fileName)
+                _removeTextEditor(_activeEditor to !)
+            
+    def menuClose_Click(sender, e as QMenuEventArgs)
+        if _activeEditor is not nil
+            _removeTextEditor(_activeEditor to !)
+    def _removeTextEditor(editor as TextEditorControl)
+        _tabs.controls.remove(editor.parent)
+    
     def menuQuit_Click(sender, e as QMenuEventArgs)
-        .saveChanges(false)
-        Application.exit
+        .close
+        
+    def _formClosing(sender, e as FormClosingEventArgs)
+        for editor in _allEditors
+            if .isModified(editor)
+                result = MessageBox.show("Save changes to [editor.fileName?'new file']?","Save?",MessageBoxButtons.YesNoCancel,MessageBoxIcon.Question)
+                if result == DialogResult.Cancel
+                    e.cancel = true
+                else if result == DialogResult.Yes
+                    if not .saveAsChanges(editor)
+                        e.cancel = true
 
     def setEditorText(fileName as String)
-        _tabEditor.text = "Editor - [System.IO.Path.getFileName(fileName)]"
-        _editor.loadFile(fileName)
-        _editor.tag = fileName
-        #_editor.document.foldingManager.foldingStrategy = CobraFoldingStrategy()
-        _editor.document.foldingManager.updateFoldings(nil,nil)
+        editor = _addNewEditor("[System.IO.Path.getFileName(fileName)]")
+        try
+            editor.loadFile(fileName)
+            .setModifiedFlag(editor,false)
+        catch ex as Exception
+            MessageBox.show(ex.message,ex.typeOf.name)
+            _removeTextEditor(editor)
+            return
+        #editor.tag = fileName
+        editor.document.foldingManager.foldingStrategy = CobraFoldingStrategy()
+        editor.document.foldingManager.updateFoldings(nil,nil)
     
     def isModified(editor as TextEditorControl) as bool
         return editor.parent.text.endsWith("*")
         
-    def setModifiedFlag(editor as TextEditorControl, flag as bool)
-        isModified = .isModified(editor)
+    def setModifiedFlag(editor as TextEditorControl?, flag as bool)
+        if editor is nil, return
+        isModified = .isModified(editor to !)
         if isModified <> flag
             p = editor.parent
             if isModified
@@ -412,28 +566,36 @@ class Editor inherits Form
             else
                 p.text +="*"
 
-    def shouldSaveAnyChanges as bool
-        """Returns true if changes should be changed.  Returns false if there are no changes, or user elects not to."""
-        if .isModified(_editor)
-            return MessageBox.show("There are unsaved changes, would you like to save?","Save unsaved changes?",MessageBoxButtons.YesNo) == DialogResult.Yes
-        return false
 
-    def saveChanges(forceSave as bool)
-        if .shouldSaveAnyChanges or forceSave
-            if String.isNullOrEmpty(_editor.tag.toString)
-                _editor.tag = .promptForSaveFileName
-            if not String.isNullOrEmpty(_editor.tag.toString)
-                _editor.saveFile(_editor.fileName)
-                .setModifiedFlag(_editor,false)
-
+    def saveChanges(editor as TextEditorControl) as bool
+        if String.isNullOrEmpty(editor.fileName)
+            return .saveAsChanges(editor)
+        
+        try
+            editor.saveFile(editor.fileName)
+            .setModifiedFlag(editor,false)
+            return true
+        catch ex as Exception
+            MessageBox.show(ex.message,ex.typeOf.name)
+            return false
+        
     
-    def promptForSaveFileName as String
+    def saveAsChanges(editor as TextEditorControl) as bool
         dlg = SaveFileDialog()
+        dlg.fileName = editor.fileName
         dlg.filter = "Cobra files|*.cobra"
         dlg.filterIndex = 1
         if dlg.showDialog == DialogResult.OK
-            return dlg.fileName ? ""
-        return ""            
+            try
+                editor.saveFile(dlg.fileName)
+                editor.parent.text = Path.getFileName(editor.fileName)
+                .setModifiedFlag(editor,false)
+                
+                editor.document.highlightingStrategy = HighlightingStrategyFactory.createHighlightingStrategyForFile(editor.fileName)
+                return true
+            catch ex as Exception
+                MessageBox.show(ex.message, ex.typeOf.name)
+        return false
     
     def promptForOpenFileName as String
         dlg = OpenFileDialog()
@@ -442,6 +604,73 @@ class Editor inherits Form
         if dlg.showDialog == DialogResult.OK
             return dlg.fileName ? ""
         return ""            
+
+
+    #this following function / logic is 100% port from the TextEditorForm sample on CodeProject
+    #in fact the Edito Menu is pretty much a port of the TextEditorForm sample
+    def _doEditAction(editor as TextEditorControl?, action as ICSharpCode.TextEditor.Actions.IEditAction?)
+        if editor is nil or action is nil, return
+        
+        area = editor.activeTextAreaControl.textArea
+        editor.beginUpdate
+        try
+            lock editor.document
+                action.execute(area)
+                if area.selectionManager.hasSomethingSelected and area.autoClearSelection
+                    if area.document.textEditorProperties.documentSelectionMode == DocumentSelectionMode.Normal
+                        area.selectionManager.clearSelection
+        finally
+            editor.endUpdate
+            area.caret.updateCaretPosition
+
+    def menuEditCut_Click(sender, e as QMenuEventArgs)
+        if _haveSelection
+            _doEditAction(_activeEditor,Actions.Cut())
+        
+    def menuEditCopy_Click(sender, e as QMenuEventArgs)
+        if _haveSelection
+            _doEditAction(_activeEditor,Actions.Copy())
+        
+    def menuEditPaste_Click(sender, e as QMenuEventArgs)
+        if _haveSelection
+            _doEditAction(_activeEditor,Actions.Paste())
+        
+    def menuEditDelete_Click(sender, e as QMenuEventArgs)
+        if _haveSelection
+            _doEditAction(_activeEditor,Actions.Delete())
+
+    def _haveSelection as bool
+        return _activeEditor is not nil and _activeEditor.activeTextAreaControl.textArea.selectionManager.hasSomethingSelected
+
+    def menuEditFind_Click(sender, e as QMenuEventArgs)
+        if _activeEditor is nil, return
+        _findForm.showFor(_activeEditor to !,false)
+        
+    def menuEditReplace_Click(sender, e as QMenuEventArgs)
+        if _activeEditor is nil, return
+        _findForm.showFor(_activeEditor to !,true)
+        
+    def menuEditFindAgain_Click(sender, e as QMenuEventArgs)
+        if _activeEditor is nil, return
+        _findForm.findNext(true,false,"Search text '[_findForm.lookFor]' not found.")
+        
+    def menuEditFindAgainReverse_Click(sender, e as QMenuEventArgs)
+        if _activeEditor is nil, return
+        _findForm.findNext(true,true,"Search text '[_findForm.lookFor]' not found.")
+
+    def menuEditToggleBookmark_Click(sender, e as QMenuEventArgs)
+        if _activeEditor is nil, return
+        _doEditAction(_activeEditor to !,Actions.ToggleBookmark())
+        _activeEditor.isIconBarVisible = _activeEditor.document.bookmarkManager.marks.count > 0
+        
+    def menuEditGoToNextBookmark_Click(sender, e as QMenuEventArgs)
+        if _activeEditor is nil, return
+        _doEditAction(_activeEditor to !,Actions.GotoNextBookmark(do(bookmark as Bookmark)=true))
+    
+    def menuEditGoToPrevBookmark_Click(sender, e as QMenuEventArgs)
+        if _activeEditor is nil, return
+        _doEditAction(_activeEditor to !,Actions.GotoPrevBookmark(do(bookmark as Bookmark)=true))
+
 
 
 enum CompilerValue
