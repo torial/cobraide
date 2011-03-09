@@ -27,6 +27,9 @@ class Solution
                 
         try
             System.IO.File.writeAllText(.fileName, fastJSON.JSON.instance.toJSON(this))
+            
+            for project in .projects
+                project.save
         catch ex as Exception
             MessageBox.show(ex.message, ex.typeOf.name)
         
@@ -42,6 +45,9 @@ class Solution
 
 class SolutionTree inherits TreeView
     var _sln as Solution?
+    var _contextMenu as QContextMenu
+    var _components as System.ComponentModel.IContainer? #
+    
     pro solution as Solution?
         get
             return _sln
@@ -53,11 +59,86 @@ class SolutionTree inherits TreeView
     
     cue init
         base.init
+        _components =System.ComponentModel.Container()
+        _initializeContextMenu
         
     cue init(sln as Solution)
         base.init
         .solution = sln
+        _components =System.ComponentModel.Container()
+        _initializeContextMenu
+
+    def _initializeContextMenu
+        _contextMenu = QContextMenu(_components)
+        mnuAddReference = QMenuItem()
+        mnuAddReference.itemName = "mnuAddReference"
+        mnuAddReference.title = "Add a Reference"
+        mnuAddReference.toolTip = "Add a Reference to the project."
+        _contextMenu.menuItems.add(mnuAddReference)
+
         
+        mnuAddFile = QMenuItem()
+        mnuAddFile.itemName = "mnuAddFile"
+        mnuAddFile.title = "Add Existing File"
+        mnuAddFile.toolTip = "Add existing file to the project."
+        _contextMenu.menuItems.add(mnuAddFile)
+        
+        mnuNewFile = QMenuItem()
+        mnuNewFile.itemName = "mnuNewFile"
+        mnuNewFile.title = "Add New File"
+        mnuNewFile.toolTip = "Add a new source file to the project."
+        
+        _contextMenu.menuItems.add(mnuNewFile)
+        
+        mnuNewProject = QMenuItem()
+        mnuNewProject.itemName = "mnuNewProject"
+        mnuNewProject.title = "Add New Project"
+        mnuNewProject.toolTip = "Add a new project to the solution."
+
+        _contextMenu.menuItems.add(mnuNewProject)
+
+        mnuAddProject = QMenuItem()
+        mnuAddProject.itemName = "mnuAddProject"
+        mnuAddProject.title = "Add Existing Project"
+        mnuAddProject.toolTip = "Add existing project to the solution."
+
+        _contextMenu.menuItems.add(mnuAddProject)
+
+        mnuRename = QMenuItem()
+        mnuRename.itemName = "mnuRename"
+        mnuRename.title = "Rename"
+        mnuRename.toolTip = "Rename the item."
+
+        _contextMenu.menuItems.add(mnuRename)
+
+
+        
+        listen _contextMenu.menuItemSelected, ref .contextMenu_MenuItemSelected
+        
+        _contextMenu.addListener(this)
+        
+    def contextMenu_MenuItemSelected(sender, e as QMenuEventArgs)
+        if e.menuItem is nil or e.menuItem.isSeparator, return
+        item = e.menuItem
+        #TODO: Add logic to handle the particular nodes available.
+        branch item.itemName
+            on "mnuAddFile"
+                pass
+            on "mnuNewFile"
+                pass
+            on "mnuNewProject"
+                pass
+            on "mnuAddProject"
+                pass
+            on "mnuRename"
+                pass
+            on "mnuNewFile1"
+                pass
+            on "mnuNewFile2"
+                pass
+
+
+
     def _initializeSolutionNodes
         .nodes.clear
         
@@ -269,8 +350,9 @@ class Editor inherits Form
     var _menuCompileTest as QMenuItem #
     var _menuCompileObjectExplorer as QMenuItem #
     var _menuCompileRun as QMenuItem #
+    var _menuExperimental as QMenuItem
    
-    var _contextMenu as QContextMenu
+    #var _contextMenu as QContextMenu
    
     var _lblOut as Label
     var _lblOutput as RichTextBox
@@ -330,7 +412,6 @@ class Editor inherits Form
         _rightDock = QDockBar(parent=this,name="_rightDock",dock=DockStyle.Right)
         projectWindow = QDockingWindow(name="projectWindow",dock=DockStyle.Top,width=200,height=400,text="Solution Explorer")
         projectWindow.owner = this
-        #projectWindow.windowGroupName = "Projects"
         _projectTree = SolutionTree(parent=projectWindow,dock=DockStyle.Fill,name="_projectTree")
         _projectTree.solution = Solution()
         pj = _projectTree.addProject(Project(name="New Project"))
@@ -343,9 +424,7 @@ class Editor inherits Form
         propertiesWindow.canDockOnOtherControlBottom = true
         propertiesWindow.owner = this
         propertiesWindow.dockWindow(_rightDock)
-        #projectWindow.dockWindow(_rightDock)
         projectWindow.dockWindow(propertiesWindow,QDockOrientation.Vertical,false)
-        #propertiesWindow.windowGroupName = "Projects"
         _itemProperties = PropertyGrid(parent=propertiesWindow,dock=DockStyle.Fill,name="_itemProperties")
         _itemProperties.selectedObject = projectWindow
         _leftDock = QDockBar(parent=this,name="_leftDock",dock=DockStyle.Left)
@@ -590,36 +669,19 @@ class Editor inherits Form
         _menuCompile.menuItems.add(_menuCompileObjectExplorer)
         _menuCompile.menuItems.add(_menuCompileRun)
 
+        ###############################################################
+        #Experimental Menu
+        _menuExperimental = QMenuItem(itemName="_menuExperimental",title="Experimental")
+        _menuAddForm = QMenuItem(itemName="_menuAddForm",title="Add Form")
+        listen _menuAddForm.menuItemActivated, ref .menuAddForm_Click
+
         _menuStrip.menuItems.add(_menuFile)
         _menuStrip.menuItems.add(menuEdit)
         _menuStrip.menuItems.add(_menuCompile)
+        _menuStrip.menuItems.add(_menuExperimental)
         
-        
-        _contextMenu = QContextMenu(_components)
-        mnuAddFile = QMenuItem()
-        mnuAddFile.itemName = "mnuAddFile"
-        mnuAddFile.title = "Add Existing File"
-        mnuAddFile.toolTip = "Add existing file to the project."
-        _contextMenu.menuItems.add(mnuAddFile)
-        
-        mnuNewFile = QMenuItem()
-        mnuNewFile.itemName = "mnuNewFile"
-        mnuNewFile.title = "Add New File"
-        mnuNewFile.toolTip = "Add a new source file to the project."
-        
-        _contextMenu.menuItems.add(mnuNewFile)
-        listen _contextMenu.menuItemSelected, ref .contextMenu_MenuItemSelected
-        
-        _contextMenu.addListener(_projectTree)
-        
-    def contextMenu_MenuItemSelected(sender, e as QMenuEventArgs)
-        if e.menuItem is nil or e.menuItem.isSeparator, return
-        item = e.menuItem
-        #TODO: Add logic to handle the particular nodes available.
-        if item.itemName == "mnuAddFile"
-            pass
-        else if item.itemName == "mnuNewFile"
-            pass
+    def menuAddForm_Click(sender, e as QMenuEventArgs)
+        pass
         
     def menuCompile_Click(sender, e as QMenuEventArgs)
         _menuCompileBuild.enabled = _p is nil
