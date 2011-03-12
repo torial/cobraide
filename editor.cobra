@@ -1,11 +1,17 @@
+%%args -ref:System.Design -ref:System.Windows.Forms
+    
 use Qios.DevSuite.Components
 use System.Windows.Forms from System.Windows.Forms
 use ICSharpCode.TextEditor
 use ICSharpCode.TextEditor.Document
 use System.ComponentModel
+use System.ComponentModel.Design from System.Design
 use System.Drawing
+use System.Drawing.Design
 use System.Diagnostics
 use fastJSON
+use pF.DesignSurfaceExt from "DesignSurfaceExt2"
+use pF.DesignSurfaceManagerExt from "DesignSurfaceManagerExt"
 
 class Solution
     pro projects from var = List<of Project>()
@@ -256,7 +262,7 @@ class FindAndReplaceForm inherits Form
     pro lookFor from var= ""
     
 
-#Many changes inspired by TextEditor sample on CodeProject.  Including the Folding Strategy
+#Many portions inspired by TextEditor sample on CodeProject.  In particular the Folding Strategy and Edit Menu
 class CobraFoldingStrategy implements IFoldingStrategy
     def generateFoldMarkers(document as IDocument, fileName as String?, parseInfo as Object?) as List<of FoldMarker>
         result = List<of FoldMarker>()
@@ -351,7 +357,8 @@ class Editor inherits Form
     var _menuCompileObjectExplorer as QMenuItem #
     var _menuCompileRun as QMenuItem #
     var _menuExperimental as QMenuItem
-   
+    var _menuAddForm as QMenuItem
+    
     #var _contextMenu as QContextMenu
    
     var _lblOut as Label
@@ -479,9 +486,9 @@ class Editor inherits Form
     def _showIntellisense(value as char)
         pass #TODO : ADD INTELLISENSE
 /#
-	        ICompletionDataProvider completionDataProvider = new CodeCompletionDataProvider();
+	        ICompletionDataProvider completionDataProvider = new CodeCompletionDataProvider()
 	        CodeCompletionWindow window = CodeCompletionWindow.ShowCompletionWindow(this, ActiveEditor, "",
-	                                                                                completionDataProvider, value);
+	                                                                                completionDataProvider, value)
 #/
 
     def _documentTabEntered(sender, e as EventArgs)
@@ -672,7 +679,9 @@ class Editor inherits Form
         ###############################################################
         #Experimental Menu
         _menuExperimental = QMenuItem(itemName="_menuExperimental",title="Experimental")
-        _menuAddForm = QMenuItem(itemName="_menuAddForm",title="Add Form")
+        _menuAddForm = QMenuItem(itemName="_menuAddForm",title="Generate Form")
+        _menuExperimental.menuItems.add(_menuAddForm)
+        
         listen _menuAddForm.menuItemActivated, ref .menuAddForm_Click
 
         _menuStrip.menuItems.add(_menuFile)
@@ -680,9 +689,246 @@ class Editor inherits Form
         _menuStrip.menuItems.add(_menuCompile)
         _menuStrip.menuItems.add(_menuExperimental)
         
+
+#region Form Generation
+    var _mgr = DesignSurfaceManagerExt()
+    
     def menuAddForm_Click(sender, e as QMenuEventArgs)
-        pass
+        tab = QTabPage(text="Design")
         
+        #tools
+        toolStrip = QToolBar()
+        toolStrip.dock = DockStyle.Top
+        btnSave = QToolItem("Generate Code")
+        toolStrip.toolItems.add(btnSave)
+        listen btnSave.menuItemActivated, ref .menuFormSave_Click
+        
+        #toolbox
+        controlsList = ListBox()
+        controlsList.dock = DockStyle.Left
+
+        toolPointer = System.Drawing.Design.ToolboxItem()
+        toolPointer.displayName = "<Pointer>"
+        toolPointer.bitmap = System.Drawing.Bitmap(16, 16)
+        controlsList.items.add(toolPointer)
+        controlsList.items.add(ToolboxItem(Button))
+        controlsList.items.add(ToolboxItem(ListView))
+        controlsList.items.add(ToolboxItem(TreeView))
+        controlsList.items.add(ToolboxItem(TextBox))
+        controlsList.items.add(ToolboxItem(Label))
+        controlsList.items.add(ToolboxItem(TabControl))
+        controlsList.items.add(ToolboxItem(OpenFileDialog))
+        controlsList.items.add(ToolboxItem(CheckBox))
+        controlsList.items.add(ToolboxItem(ComboBox))
+        controlsList.items.add(ToolboxItem(GroupBox))
+        controlsList.items.add(ToolboxItem(ImageList))
+        controlsList.items.add(ToolboxItem(Panel))
+        controlsList.items.add(ToolboxItem(ProgressBar))
+        controlsList.items.add(ToolboxItem(ToolBar))
+        controlsList.items.add(ToolboxItem(ToolTip))
+        controlsList.items.add(ToolboxItem(StatusBar))
+
+        #forms designer
+        _mgr.createFormDesigner(tab, controlsList, ref .onToolChanged)
+        serv = _mgr.designSurfaces[_mgr.designSurfaces.count-1].getService(IComponentChangeService) to IComponentChangeService
+        listen serv.componentAdded, ref .serv_ComponentAdded
+        listen serv.componentChanged, ref .serv_ComponentChanged
+        listen serv.componentRemoved, ref .serv_ComponentRemoved
+        listen serv.componentRename, ref .serv_ComponentRename
+        
+        _mgr.propertyGridHost.dock = DockStyle.Right
+        _mgr.propertyGridHost.width = 250
+        
+        tab.controls.add(_mgr.propertyGridHost)
+        tab.controls.add(controlsList)
+        tab.controls.add(toolStrip)
+        _tabs.controls.add(tab)
+
+    def menuFormSave_Click(sender, e as QMenuEventArgs)
+        content = StringBuilder()
+        content.appendLine("use System.Windows.Forms")
+        content.appendLine
+        content.appendLine("#Autogenerated UI Form")
+        content.appendLine("#To use:")
+        content.appendLine("#  * make your class partial as well.  Do not edit the generated file.")
+        content.appendLine("#  * in the 'cue init', add a call to initializeComponent")
+        content.appendLine
+        content.appendLine
+
+        currentIndent = "\t"
+        formName = "GeneratedForm"
+
+        declarations = StringBuilder()
+        for component in .currentComponents.keys
+        
+            if formName == "GeneratedForm" and component inherits Control
+                formName = (component to Control).findForm.name to !
+            
+            declarations.append(currentIndent)
+            declarations.append("var ")
+            declarations.append(component.site.name)
+            declarations.append(" as ")
+            declarations.appendLine(component.typeOf.fullName)
+        
+        content.append("partial class ")
+        content.append(formName)
+        content.appendLine(" inherits Form")
+
+        content.appendLine(declarations.toString)
+
+        content.append(currentIndent)
+        content.appendLine("def initializeComponent")
+
+        content.append(currentIndent)
+        currentIndent = "\t\t"
+        content.appendLine("#Instantiate the components")
+        for component in .currentComponents.keys
+            content.append(currentIndent)
+            content.append(".")
+            content.append(component.site.name)
+            content.append(" = ")
+            content.append(component.typeOf.fullName)
+            content.appendLine("()")
+
+        content.appendLine(currentIndent)
+        content.append(currentIndent)
+        content.appendLine("#Now initialize the components")
+        controlsList = List<of ComponentChangedEventArgs>()
+
+        for changed in .componentChanged
+            content.appendLine(currentIndent)
+            content.append(currentIndent)
+            content.appendLine("##############################")
+            content.append(currentIndent)
+            content.append("# ")
+            content.appendLine(changed.key.site.name)
+            content.append(currentIndent)
+            content.appendLine("##############################")
+            content.appendLine(currentIndent)
+
+
+            for changedEventArg in changed.value.values
+                if changedEventArg.member.name == "Controls"
+                    controlsList.add(changedEventArg)
+                    continue #That is not for this part of the loop
+
+                content.append(currentIndent)
+                if changed.key.site.name <> formName
+                    content.append(".")
+                    content.append(changed.key.site.name)
+                
+                content.append(".")
+                content.append(changedEventArg.member.name)
+                content.append(" = ")
+
+                prop =  changedEventArg.member to PropertyDescriptor
+                
+                propertyType = prop.propertyType.name
+                if propertyType == "String"
+                    content.append("'")
+                    content.append(changedEventArg.newValue.toString)
+                    content.append("'")
+                
+                else if propertyType == "Point"
+                    content.append("Point(")
+                    content.append((changedEventArg.newValue to Point ).x)
+                    content.append(",")
+                    content.append((changedEventArg.newValue to Point ).y)
+                    content.append(")")
+                
+                else if propertyType == "Size"
+                    content.append("Size(")
+                    content.append((changedEventArg.newValue to Size).width)
+                    content.append(",")
+                    content.append((changedEventArg.newValue to Size).height)
+                    content.append(")")
+                
+                else if propertyType == "Color"
+                    content.append("Color.fromName('")
+                    content.append((changedEventArg.newValue to Color).name)
+                    content.append("')")
+                
+                else if propertyType == "Int32"
+                    content.append(changedEventArg.newValue.toString)
+                
+                else
+                    content.append(changedEventArg.newValue.toString)
+                content.appendLine
+
+        content.appendLine(currentIndent)
+        content.append(currentIndent)
+        content.appendLine("#Add the components to their parent control")
+
+        for changedEventArg in controlsList
+            controls = changedEventArg.newValue to System.Windows.Forms.Control.ControlCollection
+            if controls.count == 0, continue
+
+            comp = changedEventArg.component to IComponent
+
+            content.append(currentIndent)
+            if comp.site.name <> formName
+                content.append(".")
+                content.append(comp.site.name)
+            
+            content.append(".controls.addRange(")
+            lstControls = List<of String>()
+            for c in controls
+                lstControls.add("." + c.name)
+            
+            content.append(String.join(",", lstControls.toArray))
+            content.appendLine(")")
+        
+        _addNewEditor("Generated - [formName]").text = content.toString
+        #MessageBox.show(content.toString)
+            
+        
+
+
+
+    var componentRenames = Dictionary<of IComponent, KeyValuePair<of String, String>>()
+    def serv_ComponentRename(sender, e as ComponentRenameEventArgs)
+        .componentRenames[e.component to IComponent] = KeyValuePair<of String,String>(e.newName,e.oldName)
+    
+    def serv_ComponentRemoved(sender, e as ComponentEventArgs)
+        if .componentRenames.containsKey(e.component)
+            .componentRenames.remove(e.component)
+        if .componentChanged.containsKey(e.component)
+            .componentChanged.remove(e.component)
+        if .currentComponents.containsKey(e.component)
+            .currentComponents.remove(e.component)
+        
+
+    var componentChanged = Dictionary<of IComponent, Dictionary<of String, ComponentChangedEventArgs>>()
+    def serv_ComponentChanged(sender, e as ComponentChangedEventArgs)
+        changes = Dictionary<of String, ComponentChangedEventArgs>()
+        if not .componentChanged.tryGetValue(e.component to IComponent, out changes)
+            changes = Dictionary<of String, ComponentChangedEventArgs>()
+            .componentChanged[e.component to IComponent] = changes
+        changes[e.member.name] = e
+        
+    var currentComponents = Dictionary<of IComponent, bool>()
+    def serv_ComponentAdded(sender, e as ComponentEventArgs)
+        .currentComponents[e.component] = true
+    
+    
+    def onToolChanged(sender, e as EventArgs)
+        isurf = .getCurrentIDesignSurface
+        if isurf is nil, return
+        
+        selectionService = isurf.getIDesignerHost.getService(ISelectionService) to ISelectionService
+        _mgr.propertyGridHost.selectedObject = selectionService.primarySelection
+        
+    def getCurrentIDesignSurface as IDesignSurfaceExt2?
+        #TODO: MAKE THIS SO IT CAN SUPPORT MORE THAN ONE DESIGNSURFACE
+        index = 0 #_tabs.selectedIndex
+        if index >= ((_mgr to System.ComponentModel.Design.DesignSurfaceManager).designSurfaces).count, return nil
+        
+        surface = _mgr.designSurfaces[index]
+        return surface to IDesignSurfaceExt2
+        
+       
+#endregion
+
     def menuCompile_Click(sender, e as QMenuEventArgs)
         _menuCompileBuild.enabled = _p is nil
         _menuCompileTest.enabled = _p is nil
