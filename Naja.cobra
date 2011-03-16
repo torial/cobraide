@@ -103,6 +103,7 @@ class Naja is partial inherits Form
         projectWindow = QDockingWindow(name="projectWindow",dock=DockStyle.Top,width=200,height=400,text="Solution Explorer")
         projectWindow.owner = this
         _projectTree = SolutionTree(parent=projectWindow,dock=DockStyle.Fill,name="_projectTree")
+        listen _projectTree.doubleClick, ref .solutionDoubleClicked
         _projectTree.solution = Solution()
         pj = _projectTree.addProject(Project(name="New Project"))
         _projectTree.addReference("mscorlib.dll",pj)
@@ -125,7 +126,14 @@ class Naja is partial inherits Form
         ioWindow.slideWindow(true,false)
         _lblOutput = RichTextBox(parent=ioWindow, dock=DockStyle.Fill,name="_lblOutput",autoSize=false,backColor=Color.white, borderStyle = System.Windows.Forms.BorderStyle.FixedSingle, height=400,readOnly=true)
         _lblOut = Label(parent=ioWindow, dock=DockStyle.Top,name="_lblOut",autoSize=true,text="Output:")
-        
+    
+    def solutionDoubleClicked(sender, e as System.EventArgs)
+        if _projectTree.selectedNode == nil or  _projectTree.selectedNode.tag == nil 
+            return
+        if not System.IO.File.exists(_projectTree.selectedNode.tag.toString)
+            return
+        .open(_projectTree.selectedNode.tag.toString)
+    
     def _addNewEditor(title as String) as TextEditorControl
         tabEditor = QTabPage(text=title)
         _tabs.controls.add(tabEditor)
@@ -473,10 +481,13 @@ class Naja is partial inherits Form
     def menuOpen_Click(sender, e as QMenuEventArgs)
         fileName = NajaUtils.promptForOpenFileName
         if fileName <> ""
-            .setEditorText(fileName)
-            
-            if _activeEditor is not nil and _activeEditor.document.textLength and String.isNullOrEmpty(_activeEditor.fileName)
-                _removeTextEditor(_activeEditor to !)
+            .open(fileName)
+        
+    def open(fileName as String)
+        .setEditorText(fileName)
+        
+        if _activeEditor is not nil and _activeEditor.document.textLength and String.isNullOrEmpty(_activeEditor.fileName)
+            _removeTextEditor(_activeEditor to !)
             
     def menuClose_Click(sender, e as QMenuEventArgs)
         if _activeEditor is not nil
