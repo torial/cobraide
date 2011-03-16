@@ -9,329 +9,11 @@ use System.ComponentModel.Design from System.Design
 use System.Drawing
 use System.Drawing.Design
 use System.Diagnostics
-use fastJSON
 use pF.DesignSurfaceExt from "DesignSurfaceExt2"
 use pF.DesignSurfaceManagerExt from "DesignSurfaceManagerExt"
 use Cobra.Lang.Compiler
 
-class Solution
-    pro projects from var = List<of Project>()
-    pro startupProject from var as Project?
-    pro name from var = "New Solution"
-    pro fileName from var = ""
-    
-    cue init
-        base.init
-
-    def save
-        if .fileName == ""
-            dlg = SaveFileDialog()
-            dlg.fileName = .fileName
-            dlg.filter = "Cobra Solution files|*.cobrasln"
-            dlg.filterIndex = 1
-            if dlg.showDialog == DialogResult.OK
-                .fileName = dlg.fileName to !
-                
-        try
-            System.IO.File.writeAllText(.fileName, fastJSON.JSON.instance.toJSON(this))
-            
-            for project in .projects
-                project.save
-        catch ex as Exception
-            MessageBox.show(ex.message, ex.typeOf.name)
-        
-    def load(fileName as String) as Solution is shared
-        try
-            
-            result = fastJSON.JSON.instance.toObject(System.IO.File.readAllText(fileName)) to Solution
-            result.fileName = fileName #just in case it got overwritten in the deserialization
-            return result
-        catch ex as Exception
-            MessageBox.show(ex.message, ex.typeOf.name)
-            return Solution()
-
-class SolutionTree inherits TreeView
-    var _sln as Solution?
-    var _contextMenu as QContextMenu
-    var _components as System.ComponentModel.IContainer? #
-    
-    pro solution as Solution?
-        get
-            return _sln
-        set 
-            _sln = value
-            _initializeSolutionNodes
-    
-    var _solutionNode as TreeNode?
-    
-    cue init
-        base.init
-        _components =System.ComponentModel.Container()
-        _initializeContextMenu
-        
-    cue init(sln as Solution)
-        base.init
-        .solution = sln
-        _components =System.ComponentModel.Container()
-        _initializeContextMenu
-
-    def _initializeContextMenu
-        _contextMenu = QContextMenu(_components)
-        mnuAddReference = QMenuItem()
-        mnuAddReference.itemName = "mnuAddReference"
-        mnuAddReference.title = "Add a Reference"
-        mnuAddReference.toolTip = "Add a Reference to the project."
-        _contextMenu.menuItems.add(mnuAddReference)
-
-        
-        mnuAddFile = QMenuItem()
-        mnuAddFile.itemName = "mnuAddFile"
-        mnuAddFile.title = "Add Existing File"
-        mnuAddFile.toolTip = "Add existing file to the project."
-        _contextMenu.menuItems.add(mnuAddFile)
-        
-        mnuNewFile = QMenuItem()
-        mnuNewFile.itemName = "mnuNewFile"
-        mnuNewFile.title = "Add New File"
-        mnuNewFile.toolTip = "Add a new source file to the project."
-        
-        _contextMenu.menuItems.add(mnuNewFile)
-        
-        mnuNewProject = QMenuItem()
-        mnuNewProject.itemName = "mnuNewProject"
-        mnuNewProject.title = "Add New Project"
-        mnuNewProject.toolTip = "Add a new project to the solution."
-
-        _contextMenu.menuItems.add(mnuNewProject)
-
-        mnuAddProject = QMenuItem()
-        mnuAddProject.itemName = "mnuAddProject"
-        mnuAddProject.title = "Add Existing Project"
-        mnuAddProject.toolTip = "Add existing project to the solution."
-
-        _contextMenu.menuItems.add(mnuAddProject)
-
-        mnuRename = QMenuItem()
-        mnuRename.itemName = "mnuRename"
-        mnuRename.title = "Rename"
-        mnuRename.toolTip = "Rename the item."
-
-        _contextMenu.menuItems.add(mnuRename)
-
-
-        
-        listen _contextMenu.menuItemSelected, ref .contextMenu_MenuItemSelected
-        
-        _contextMenu.addListener(this)
-        
-    def contextMenu_MenuItemSelected(sender, e as QMenuEventArgs)
-        if e.menuItem is nil or e.menuItem.isSeparator, return
-        item = e.menuItem
-        #TODO: Add logic to handle the particular nodes available.
-        branch item.itemName
-            on "mnuAddFile"
-                pass
-            on "mnuNewFile"
-                pass
-            on "mnuNewProject"
-                pass
-            on "mnuAddProject"
-                pass
-            on "mnuRename"
-                pass
-            on "mnuNewFile1"
-                pass
-            on "mnuNewFile2"
-                pass
-
-
-
-    def _initializeSolutionNodes
-        .nodes.clear
-        
-        sln = TreeNode(name="Solution",text="Solution '[.solution.name]' ([.solution.projects.count] projects)")
-        _solutionNode = sln
-        sln.tag = .solution
-        .nodes.add(sln)
-        for project in .solution.projects
-            _initializeProjectNode(project, project == .solution.startupProject)
-        sln.expand
-        
-    def _initializeProjectNode(project as Project, isStartup as bool) as TreeNode
-        pj = TreeNode(name="Project|[project.name]",text=project.name + " ")
-        if isStartup
-            pj.nodeFont = Font(pj.nodeFont,pj.nodeFont.style | FontStyle.Bold)
-        pj.tag = project
-        _solutionNode.nodes.add(pj)
-        
-        #references
-        references = TreeNode(name="References|[project.name]",text="References")
-        pj.nodes.add(references)
-        
-        for reference in project.references
-            prefix = ""
-            if reference in ["mscorlib.dll","System.dll","Cobra.Lang.dll"], prefix = "DEFAULT|"
-            references.nodes.add(TreeNode(name=prefix + reference, text=reference.replace(".dll","") ))
-        
-        #files
-        files = TreeNode(name="Files|[project.name]",text="Files")
-        pj.nodes.add(files)
-        for file in project.files
-            files.nodes.add(TreeNode(name=file,text=file))
-            
-        files.expand
-        references.expand
-        pj.expand
-        return pj
-
-    def closeSolution
-        .solution = Solution()
-
-    def addProject(project as Project) as TreeNode
-        if _solutionNode is nil
-            .solution = Solution()
-        projectNode= _initializeProjectNode(project, false)
-        .solution.projects.add(project)
-        return projectNode
-        
-    def removeProject(projectNode as TreeNode)
-        if _solutionNode is nil, return
-        _solutionNode.nodes.remove(projectNode)
-        .solution.projects.remove(projectNode.tag to Project)
-        
-    def addReference(reference as String,projectNode as TreeNode) as TreeNode
-        referenceNode = TreeNode(name=reference,text=reference.replace(".dll","") + " ")
-        projectNode.nodes["References|[(projectNode.tag to Project).name]"].nodes.add(referenceNode)
-        (projectNode.tag to Project).references.add(reference)
-        return referenceNode
-        
-    def addFile(file as String, projectNode as TreeNode) as TreeNode
-        fileNode = TreeNode(name=file,text=file)
-        projName = (projectNode.tag to Project).name
-        projectNode.nodes["Files|[projName]"].nodes.add(fileNode)
-        (projectNode.tag to Project).files.add(file)
-        return fileNode
-        
-    def removeReference(referenceNode as TreeNode, projectNode as TreeNode)
-        if referenceNode.name.startsWith("DEFAULT|"), return #can't get rid of the default references. 
-        projectNode.nodes["References|[(projectNode.tag to Project).name]"].nodes.remove(referenceNode)
-        (projectNode.tag to Project).references.remove(referenceNode.text)
-        
-    def removeFile(fileNode as TreeNode, projectNode as TreeNode)
-        projectNode.nodes["Files|[(projectNode.tag to Project).name]"].nodes.remove(fileNode)
-        (projectNode.tag to Project).files.remove(fileNode.text)
-
-class Project
-    pro references from var = List<of String>()
-    pro files from var = List<of String>()
-    pro name from var = "New Project"
-    pro fileName from var = ""
-    
-    cue init
-        base.init
-    
-    def save
-        if .fileName == ""
-            dlg = SaveFileDialog()
-            dlg.fileName = .fileName
-            dlg.filter = "Cobra Project files|*.cobraproj"
-            dlg.filterIndex = 1
-            if dlg.showDialog == DialogResult.OK
-                .fileName = dlg.fileName to !
-                
-        try
-            System.IO.File.writeAllText(.fileName, fastJSON.JSON.instance.toJSON(this))
-        catch ex as Exception
-            MessageBox.show(ex.message, ex.typeOf.name)
-        
-    def load(fileName as String) as Project is shared
-        try
-            
-            result = fastJSON.JSON.instance.toObject(System.IO.File.readAllText(fileName)) to Project
-            result.fileName = fileName #just in case it got overwritten in the deserialization
-            return result
-        catch ex as Exception
-            MessageBox.show(ex.message, ex.typeOf.name)
-            return Project()
-            
-class FindAndReplaceForm inherits Form
-    def showFor(editor as TextEditorControl, isReplacing as bool)
-        pass
-    def findNext(unknown as bool, isReverse as bool, errMsg as String)
-        pass
-    
-    pro lookFor from var= ""
-    
-
-#Many portions inspired by TextEditor sample on CodeProject.  In particular the Folding Strategy and Edit Menu
-class CobraFoldingStrategy implements IFoldingStrategy
-    def generateFoldMarkers(document as IDocument, fileName as String?, parseInfo as Object?) as List<of FoldMarker>
-        result = List<of FoldMarker>()
-            
-        blockCommentStartLines = Stack<of int>()
-        regionStartLines = Stack<of int>()
-        blockStartLines = Stack<of KeyValuePair<of int,int>>()
-        
-        inBlockComment = false
-        
-        for iLine in document.totalNumberOfLines
-            seg = document.getLineSegment(iLine)
-            line = document.getText(seg)
-            trimmed = line.trim
-            currentIndent = line.length - trimmed.length
-            
-            #The block comment WILL fail in the following scenarios:
-            #    #/    /# some stuff... a few lines #/
-            if trimmed.contains("/#") and not trimmed.startsWith("#")
-                inBlockComment = true
-                blockCommentStartLines.push(iLine)
-            if trimmed.contains("#/") and inBlockComment and blockCommentStartLines.count > 0
-                inBlockComment = false
-                blockStart = blockCommentStartLines.pop
-                result.add(FoldMarker(document,blockStart,document.getText(document.getLineSegment(blockStart)).indexOf("/#"),iLine,currentIndent + "#/".length))
-                
-            else if inBlockComment
-                continue #skip over all logic until an end comment is found.
-            else if trimmed.startsWith("#region")
-                regionStartLines.push(iLine)
-            else if trimmed.startsWith("#endregion") and regionStartLines.count > 0
-                start = regionStartLines.pop
-                result.add(FoldMarker(document,start,document.getLineSegment(start).length,iLine,currentIndent + "#endregion".length))
-            else if _isBlockScope(trimmed)
-                while blockStartLines.count > 0 and blockStartLines.peek.value >= currentIndent
-                    #we know there is another block with the same start, so go ahead and close it out.
-                    origStart = blockStartLines.pop
-                    kvp = _getPriorNonCommentNonBlankLine(document,iLine)
-                    endLine = kvp.key
-                    endText = kvp.value
-                    result.add(FoldMarker(document,origStart.key,document.getLineSegment(origStart.key).length, endLine,endText.length ))
-                
-                blockStartLines.push(KeyValuePair<of int,int>(iLine,line.length-trimmed.length))
-        
-        #close out any unmatched folds
-        while blockStartLines.count > 0 
-            origStart = blockStartLines.pop
-            kvp = _getPriorNonCommentNonBlankLine(document,iLine)
-            endLine = kvp.key
-            endText = kvp.value
-            result.add(FoldMarker(document,origStart.key,document.getLineSegment(origStart.key).length, endLine,endText.length ))
-       
-        return result
-
-    def _isBlockScope(l as String) as bool
-        return l.startsWith("cue ") or l.startsWith("def ") or l.startsWith("ensure") or l.startsWith("require") or l.startsWith("body") or l.startsWith("test") or l.startsWith("class ") or l.startsWith("namespace ")
-        
-    def _getPriorNonCommentNonBlankLine(document as IDocument, iLine as int) as KeyValuePair<of int,String>
-        post while iLine > 0 
-            iLine -=1
-            #TODO, support block comments /# #/
-            line = document.getText(document.getLineSegment(iLine))
-            trimmed = line.trim
-            if not trimmed.startsWith("#") and not trimmed.length == 0
-                return KeyValuePair<of int,String>(iLine,line)
-        return KeyValuePair<of int,String>(iLine,"")
-
-class Editor inherits Form
+class Naja is partial inherits Form
     var _editorSettings as ITextEditorProperties?
     var _findForm = FindAndReplaceForm()
     
@@ -441,7 +123,7 @@ class Editor inherits Form
         ioWindow.owner = this
         ioWindow.dockWindow(_bottomDock)
         ioWindow.slideWindow(true,false)
-        _lblOutput = RichTextBox(parent=ioWindow, dock=DockStyle.Top,name="_lblOutput",autoSize=false,backColor=Color.white, borderStyle = System.Windows.Forms.BorderStyle.FixedSingle, height=400,readOnly=true)
+        _lblOutput = RichTextBox(parent=ioWindow, dock=DockStyle.Fill,name="_lblOutput",autoSize=false,backColor=Color.white, borderStyle = System.Windows.Forms.BorderStyle.FixedSingle, height=400,readOnly=true)
         _lblOut = Label(parent=ioWindow, dock=DockStyle.Top,name="_lblOut",autoSize=true,text="Output:")
         
     def _addNewEditor(title as String) as TextEditorControl
@@ -691,248 +373,7 @@ class Editor inherits Form
         _menuStrip.menuItems.add(_menuExperimental)
         
 
-#region Form Generation
-    var _mgr = DesignSurfaceManagerExt()
-    
-    def menuAddForm_Click(sender, e as QMenuEventArgs)
-        tab = QTabPage(text="Design")
-        
-        #tools
-        toolStrip = QToolBar()
-        toolStrip.dock = DockStyle.Top
-        btnSave = QToolItem("Generate Code")
-        toolStrip.toolItems.add(btnSave)
-        listen btnSave.menuItemActivated, ref .menuFormSave_Click
-        
-        #toolbox
-        controlsList = ListBox()
-        controlsList.dock = DockStyle.Left
 
-        toolPointer = System.Drawing.Design.ToolboxItem()
-        toolPointer.displayName = "<Pointer>"
-        toolPointer.bitmap = System.Drawing.Bitmap(16, 16)
-        controlsList.items.add(toolPointer)
-        controlsList.items.add(ToolboxItem(Button))
-        controlsList.items.add(ToolboxItem(ListView))
-        controlsList.items.add(ToolboxItem(TreeView))
-        controlsList.items.add(ToolboxItem(TextBox))
-        controlsList.items.add(ToolboxItem(Label))
-        controlsList.items.add(ToolboxItem(TabControl))
-        controlsList.items.add(ToolboxItem(OpenFileDialog))
-        controlsList.items.add(ToolboxItem(CheckBox))
-        controlsList.items.add(ToolboxItem(ComboBox))
-        controlsList.items.add(ToolboxItem(GroupBox))
-        controlsList.items.add(ToolboxItem(ImageList))
-        controlsList.items.add(ToolboxItem(Panel))
-        controlsList.items.add(ToolboxItem(ProgressBar))
-        controlsList.items.add(ToolboxItem(ToolBar))
-        controlsList.items.add(ToolboxItem(ToolTip))
-        controlsList.items.add(ToolboxItem(StatusBar))
-
-        #forms designer
-        _mgr.createFormDesigner(tab, controlsList, ref .onToolChanged)
-        serv = _mgr.designSurfaces[_mgr.designSurfaces.count-1].getService(IComponentChangeService) to IComponentChangeService
-        listen serv.componentAdded, ref .serv_ComponentAdded
-        listen serv.componentChanged, ref .serv_ComponentChanged
-        listen serv.componentRemoved, ref .serv_ComponentRemoved
-        listen serv.componentRename, ref .serv_ComponentRename
-        
-        _mgr.propertyGridHost.dock = DockStyle.Right
-        _mgr.propertyGridHost.width = 250
-        
-        tab.controls.add(_mgr.propertyGridHost)
-        tab.controls.add(controlsList)
-        tab.controls.add(toolStrip)
-        _tabs.controls.add(tab)
-
-    def menuFormSave_Click(sender, e as QMenuEventArgs)
-        content = StringBuilder()
-        content.appendLine("use System.Windows.Forms")
-        content.appendLine("use System.Drawing")
-        content.appendLine
-        content.appendLine("#Autogenerated UI Form")
-        content.appendLine("#To use:")
-        content.appendLine("#  * make your class partial as well.  Do not edit the generated file.")
-        content.appendLine("#  * in the 'cue init', add a call to initializeComponent")
-        content.appendLine
-        content.appendLine
-
-        currentIndent = "\t"
-        formName = "GeneratedForm"
-
-        declarations = StringBuilder()
-        for component in .currentComponents.keys
-        
-            if formName == "GeneratedForm" and component inherits Control
-                formName = (component to Control).findForm.name to !
-                formName = formName[0:1].toUpper + formName[1:]
-            
-            declarations.append(currentIndent)
-            declarations.append("var ")
-            declarations.append(Utils.cobraNameForSharpMemberName(component.site.name to !))
-            declarations.append(" as ")
-            declarations.appendLine(component.typeOf.fullName)
-        
-        content.append("class ")
-        content.append(formName)
-        content.appendLine(" is partial inherits Form")
-
-        content.appendLine(declarations.toString)
-
-        content.append(currentIndent)
-        content.appendLine("def initializeComponent")
-
-        content.append(currentIndent)
-        currentIndent = "\t\t"
-        content.appendLine("#Instantiate the components")
-        for component in .currentComponents.keys
-            content.append(currentIndent)
-            currentVar = Utils.cobraNameForSharpMemberName(component.site.name to !)
-            if not currentVar.startsWith("_"), content.append(".")
-            content.append(currentVar)
-            content.append(" = ")
-            content.append(component.typeOf.fullName)
-            content.appendLine("()")
-
-        content.appendLine(currentIndent)
-        content.append(currentIndent)
-        content.appendLine("#Now initialize the components")
-        controlsList = List<of ComponentChangedEventArgs>()
-
-        for changed in .componentChanged
-            content.appendLine(currentIndent)
-            content.append(currentIndent)
-            content.appendLine("##############################")
-            content.append(currentIndent)
-            content.append("# ")
-            currentVar = Utils.cobraNameForSharpMemberName(changed.key.site.name to !)
-            content.appendLine(currentVar)
-            content.append(currentIndent)
-            content.appendLine("##############################")
-            content.appendLine(currentIndent)
-
-
-            for changedEventArg in changed.value.values
-                if changedEventArg.newValue == nil, continue
-            
-                if changedEventArg.member.name == "Controls"
-                    controlsList.add(changedEventArg)
-                    continue #That is not for this part of the loop
-
-                content.append(currentIndent)
-                if changed.key.site.name.toLower <> formName.toLower
-                    content.append(".")
-                    content.append(currentVar)
-                
-                content.append(".")
-                content.append(Utils.cobraNameForSharpMemberName(changedEventArg.member.name to !))
-                content.append(" = ")
-
-                prop =  changedEventArg.member to PropertyDescriptor
-                
-                propertyType = prop.propertyType.name
-                if propertyType == "String"
-                    content.append("'")
-                    content.append(changedEventArg.newValue.toString)
-                    content.append("'")
-                
-                else if propertyType == "Point"
-                    content.append("Point(")
-                    content.append((changedEventArg.newValue to Point ).x)
-                    content.append(",")
-                    content.append((changedEventArg.newValue to Point ).y)
-                    content.append(")")
-                
-                else if propertyType == "Size"
-                    content.append("Size(")
-                    content.append((changedEventArg.newValue to Size).width)
-                    content.append(",")
-                    content.append((changedEventArg.newValue to Size).height)
-                    content.append(")")
-                
-                else if propertyType == "Color"
-                    content.append("Color.fromName('")
-                    content.append((changedEventArg.newValue to Color).name)
-                    content.append("')")
-                
-                else if propertyType == "Int32"
-                    content.append(changedEventArg.newValue.toString)
-                else if propertyType == "Boolean"
-                    content.append(changedEventArg.newValue.toString.toLower)
-                else
-                    content.append(changedEventArg.newValue.toString)
-                content.appendLine
-
-        content.appendLine(currentIndent)
-        content.append(currentIndent)
-        content.appendLine("#Add the components to their parent control")
-
-        for changedEventArg in controlsList
-            controls = changedEventArg.newValue to System.Windows.Forms.Control.ControlCollection
-            if controls.count == 0, continue
-
-            comp = changedEventArg.component to IComponent
-
-            content.append(currentIndent)
-            if comp.site.name.toLower <> formName.toLower
-                if not currentVar.startsWith("_"), content.append(".")
-                content.append(Utils.cobraNameForSharpMemberName(comp.site.name to !))
-            
-            content.append(".controls.addRange(@[")
-            lstControls = List<of String>()
-            for c in controls
-                lstControls.add("." + Utils.cobraNameForSharpMemberName(c.name to !))
-            
-            content.append(String.join(",", lstControls.toArray))
-            content.appendLine("])")
-        
-        _addNewEditor("Generated - [formName]").text = content.toString
-        #MessageBox.show(content.toString)
-            
-
-    var componentRenames = Dictionary<of IComponent, KeyValuePair<of String, String>>()
-    def serv_ComponentRename(sender, e as ComponentRenameEventArgs)
-        .componentRenames[e.component to IComponent] = KeyValuePair<of String,String>(e.newName,e.oldName)
-    
-    def serv_ComponentRemoved(sender, e as ComponentEventArgs)
-        if .componentRenames.containsKey(e.component)
-            .componentRenames.remove(e.component)
-        if .componentChanged.containsKey(e.component)
-            .componentChanged.remove(e.component)
-        if .currentComponents.containsKey(e.component)
-            .currentComponents.remove(e.component)
-        
-
-    var componentChanged = Dictionary<of IComponent, Dictionary<of String, ComponentChangedEventArgs>>()
-    def serv_ComponentChanged(sender, e as ComponentChangedEventArgs)
-        changes = Dictionary<of String, ComponentChangedEventArgs>()
-        if not .componentChanged.tryGetValue(e.component to IComponent, out changes)
-            changes = Dictionary<of String, ComponentChangedEventArgs>()
-            .componentChanged[e.component to IComponent] = changes
-        changes[e.member.name] = e
-        
-    var currentComponents = Dictionary<of IComponent, bool>()
-    def serv_ComponentAdded(sender, e as ComponentEventArgs)
-        .currentComponents[e.component] = true
-    
-    
-    def onToolChanged(sender, e as EventArgs)
-        isurf = .getCurrentIDesignSurface
-        if isurf is nil, return
-        
-        selectionService = isurf.getIDesignerHost.getService(ISelectionService) to ISelectionService
-        _mgr.propertyGridHost.selectedObject = selectionService.primarySelection
-        
-    def getCurrentIDesignSurface as IDesignSurfaceExt2?
-        #TODO: MAKE THIS SO IT CAN SUPPORT MORE THAN ONE DESIGNSURFACE
-        index = 0 #_tabs.selectedIndex
-        if index >= ((_mgr to System.ComponentModel.Design.DesignSurfaceManager).designSurfaces).count, return nil
-        
-        surface = _mgr.designSurfaces[index]
-        return surface to IDesignSurfaceExt2
-        
-       
-#endregion
 
     def menuCompile_Click(sender, e as QMenuEventArgs)
         _menuCompileBuild.enabled = _p is nil
@@ -960,7 +401,15 @@ class Editor inherits Form
         p.startInfo.redirectStandardError = true
         p.startInfo.fileName = r"C:\Cobra\bin\cobra.bat"
         p.enableRaisingEvents = true
-        p.startInfo.arguments = args + " [_activeEditor.fileName]"
+        fileArgs = ""
+        curProj = _projectTree.solution.projects[0]
+        if _activeEditor == nil
+            fileArgs = String.join(" ", curProj.files.toArray) to !
+        else if curProj.files.contains(_activeEditor.fileName)
+            fileArgs = String.join(" ", curProj.files.toArray) to !
+        else
+            fileArgs = _activeEditor.fileName to !
+        p.startInfo.arguments = args + " " + fileArgs
         .logIO(p.startInfo.fileName + " " + p.startInfo.arguments,Color.blue)
         listen p.outputDataReceived, ref .outputDataReceived
         listen p.errorDataReceived, ref .errorDataReceived
@@ -995,13 +444,14 @@ class Editor inherits Form
         _p = nil
 
     def menuFileProjectSave_Click(sender, e as QMenuEventArgs)
-        pass
+        _projectTree.solution.save
         
     def menuFileProjectSaveAs_Click(sender, e as QMenuEventArgs)
-        pass
+        _projectTree.solution.fileName = "" #force Save As    
+        _projectTree.solution.save
         
     def menuFileProjectOpen_Click(sender, e as QMenuEventArgs)
-        pass
+        _projectTree.solution = Solution.load(NajaUtils.promptForOpenFileName("Cobra Solution files|*.cobrasln"))
         
     def menuFileProjectNew_Click(sender, e as QMenuEventArgs)
         pass
@@ -1021,7 +471,7 @@ class Editor inherits Form
         _addNewEditor("New file")
         
     def menuOpen_Click(sender, e as QMenuEventArgs)
-        fileName = .promptForOpenFileName
+        fileName = NajaUtils.promptForOpenFileName
         if fileName <> ""
             .setEditorText(fileName)
             
@@ -1088,13 +538,10 @@ class Editor inherits Form
         
     
     def saveAsChanges(editor as TextEditorControl) as bool
-        dlg = SaveFileDialog()
-        dlg.fileName = editor.fileName
-        dlg.filter = "Cobra files|*.cobra"
-        dlg.filterIndex = 1
-        if dlg.showDialog == DialogResult.OK
+        fileName = NajaUtils.promptForSaveAsFileName(editor.fileName)
+        if fileName.length <> 0
             try
-                editor.saveFile(dlg.fileName)
+                editor.saveFile(fileName)
                 editor.parent.text = Path.getFileName(editor.fileName)
                 .setModifiedFlag(editor,false)
                 
@@ -1104,17 +551,10 @@ class Editor inherits Form
                 MessageBox.show(ex.message, ex.typeOf.name)
         return false
     
-    def promptForOpenFileName as String
-        dlg = OpenFileDialog()
-        dlg.filter = "Cobra files|*.cobra"
-        dlg.filterIndex = 1
-        if dlg.showDialog == DialogResult.OK
-            return dlg.fileName ? ""
-        return ""            
 
 
     #this following function / logic is 100% port from the TextEditorForm sample on CodeProject
-    #in fact the Edito Menu is pretty much a port of the TextEditorForm sample
+    #in fact the Editor Menu is pretty much a port of the TextEditorForm sample
     def _doEditAction(editor as TextEditorControl?, action as ICSharpCode.TextEditor.Actions.IEditAction?)
         if editor is nil or action is nil, return
         
@@ -1197,4 +637,4 @@ class Program
 
     def main is shared
         has STAThread
-        Application.run(Editor())
+        Application.run(Naja())

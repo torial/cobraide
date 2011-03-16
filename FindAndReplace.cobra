@@ -1,0 +1,11 @@
+use System.Windows.Forms from System.Windows.Forms
+use ICSharpCode.TextEditor
+use ICSharpCode.TextEditor.Document
+
+class FindAndReplaceForm inherits Form
+    def showFor(editor as TextEditorControl, isReplacing as bool)
+        pass
+    def findNext(unknown as bool, isReverse as bool, errMsg as String)
+        pass
+    
+    pro lookFor from var= ""

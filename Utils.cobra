@@ -1,0 +1,27 @@
+use System.Windows.Forms
+
+class NajaUtils
+    def promptForOpenFileName as String is shared
+        return .promptForOpenFileName("Cobra files|*.cobra")
+    
+    def promptForOpenFileName(filter as String) as String is shared
+        dlg = OpenFileDialog()
+        dlg.filter = filter
+        dlg.filterIndex = 1
+        if dlg.showDialog == DialogResult.OK
+            return dlg.fileName ? ""
+        return ""
+        
+    def promptForSaveAsFileName(startFileName as String) as String is shared
+        return .promptForSaveAsFileName(startFileName, "Cobra files|*.cobra")
+        
+    def promptForSaveAsFileName(startFileName as String,filter as String) as String is shared
+        dlg = SaveFileDialog()
+        dlg.fileName = startFileName
+        dlg.filter = filter
+        dlg.filterIndex = 1
+        if dlg.showDialog == DialogResult.OK
+            return dlg.fileName ? ""
+        else
+            return ""
+

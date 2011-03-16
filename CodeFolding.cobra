@@ -1,0 +1,71 @@
+use ICSharpCode.TextEditor
+use ICSharpCode.TextEditor.Document
+
+
+#Many portions inspired by TextEditor sample on CodeProject.  In particular the Folding Strategy and Edit Menu
+class CobraFoldingStrategy implements IFoldingStrategy
+    def generateFoldMarkers(document as IDocument, fileName as String?, parseInfo as Object?) as List<of FoldMarker>
+        result = List<of FoldMarker>()
+            
+        blockCommentStartLines = Stack<of int>()
+        regionStartLines = Stack<of int>()
+        blockStartLines = Stack<of KeyValuePair<of int,int>>()
+        
+        inBlockComment = false
+        
+        for iLine in document.totalNumberOfLines
+            seg = document.getLineSegment(iLine)
+            line = document.getText(seg)
+            trimmed = line.trim
+            currentIndent = line.length - trimmed.length
+            
+            #The block comment WILL fail in the following scenarios:
+            #    #/    /# some stuff... a few lines #/
+            if trimmed.contains("/#") and not trimmed.startsWith("#")
+                inBlockComment = true
+                blockCommentStartLines.push(iLine)
+            if trimmed.contains("#/") and inBlockComment and blockCommentStartLines.count > 0
+                inBlockComment = false
+                blockStart = blockCommentStartLines.pop
+                result.add(FoldMarker(document,blockStart,document.getText(document.getLineSegment(blockStart)).indexOf("/#"),iLine,currentIndent + "#/".length))
+                
+            else if inBlockComment
+                continue #skip over all logic until an end comment is found.
+            else if trimmed.startsWith("#region")
+                regionStartLines.push(iLine)
+            else if trimmed.startsWith("#endregion") and regionStartLines.count > 0
+                start = regionStartLines.pop
+                result.add(FoldMarker(document,start,document.getLineSegment(start).length,iLine,currentIndent + "#endregion".length))
+            else if _isBlockScope(trimmed)
+                while blockStartLines.count > 0 and blockStartLines.peek.value >= currentIndent
+                    #we know there is another block with the same start, so go ahead and close it out.
+                    origStart = blockStartLines.pop
+                    kvp = _getPriorNonCommentNonBlankLine(document,iLine)
+                    endLine = kvp.key
+                    endText = kvp.value
+                    result.add(FoldMarker(document,origStart.key,document.getLineSegment(origStart.key).length, endLine,endText.length ))
+                
+                blockStartLines.push(KeyValuePair<of int,int>(iLine,line.length-trimmed.length))
+        
+        #close out any unmatched folds
+        while blockStartLines.count > 0 
+            origStart = blockStartLines.pop
+            kvp = _getPriorNonCommentNonBlankLine(document,iLine)
+            endLine = kvp.key
+            endText = kvp.value
+            result.add(FoldMarker(document,origStart.key,document.getLineSegment(origStart.key).length, endLine,endText.length ))
+       
+        return result
+
+    def _isBlockScope(l as String) as bool
+        return l.startsWith("cue ") or l.startsWith("def ") or l.startsWith("ensure") or l.startsWith("require") or l.startsWith("body") or l.startsWith("test") or l.startsWith("class ") or l.startsWith("namespace ")
+        
+    def _getPriorNonCommentNonBlankLine(document as IDocument, iLine as int) as KeyValuePair<of int,String>
+        post while iLine > 0 
+            iLine -=1
+            #TODO, support block comments /# #/
+            line = document.getText(document.getLineSegment(iLine))
+            trimmed = line.trim
+            if not trimmed.startsWith("#") and not trimmed.length == 0
+                return KeyValuePair<of int,String>(iLine,line)
+        return KeyValuePair<of int,String>(iLine,"")
