@@ -79,6 +79,13 @@ class SolutionTree inherits TreeView
         mnuAddFile.toolTip = "Add existing file to the project."
         _contextMenu.menuItems.add(mnuAddFile)
         
+        mnuRemoveFile = QMenuItem()
+        mnuRemoveFile.itemName = "mnuRemoveFile"
+        mnuRemoveFile.title = "Remove Existing File"
+        mnuRemoveFile.toolTip = "Remove file from the project."
+        _contextMenu.menuItems.add(mnuRemoveFile)
+        
+        
         mnuNewFile = QMenuItem()
         mnuNewFile.itemName = "mnuNewFile"
         mnuNewFile.title = "Add New File"
@@ -130,8 +137,14 @@ class SolutionTree inherits TreeView
                 pass
             on "mnuRename"
                 pass
-            on "mnuNewFile1"
-                pass
+            on "mnuRemoveFile"
+                trace .selectedNode
+                if .selectedNode == nil or  .selectedNode.tag  == nil 
+                    return
+                fileName = .selectedNode.tag.toString
+                if not System.IO.File.exists(fileName) and fileName <> "New File"
+                    return
+                .removeFile(.selectedNode to !, _solutionNode.nodes[0] to !)
             on "mnuNewFile2"
                 pass
 
@@ -168,7 +181,7 @@ class SolutionTree inherits TreeView
         files = TreeNode(name="Files|[project.name]",text="Files")
         pj.nodes.add(files)
         for file in project.files
-            files.nodes.add(TreeNode(name=file,text=file))
+            files.nodes.add(TreeNode(name=file,text=System.IO.Path.getFileName(file),tag=file))
             
         files.expand
         references.expand
@@ -197,7 +210,7 @@ class SolutionTree inherits TreeView
         return referenceNode
         
     def addFile(file as String, projectNode as TreeNode) as TreeNode
-        fileNode = TreeNode(name=file,text=file)
+        fileNode = TreeNode(name=file,text=System.IO.Path.getFileName(file),tag=file)
         projName = (projectNode.tag to Project).name
         projectNode.nodes["Files|[projName]"].nodes.add(fileNode)
         (projectNode.tag to Project).files.add(file)
