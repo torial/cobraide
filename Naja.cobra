@@ -148,6 +148,7 @@ class Naja is partial inherits Form
         listen editor.activeTextAreaControl.textArea.keyDown, ref _keyDown
         if _editorSettings is nil
             _editorSettings = editor.textEditorProperties
+            _editorSettings.convertTabsToSpaces = true
             .onSettingsChanged
         else
             editor.textEditorProperties = _editorSettings
@@ -590,15 +591,14 @@ class Naja is partial inherits Form
             _doEditAction(_activeEditor,Actions.Copy())
         
     def menuEditPaste_Click(sender, e as QMenuEventArgs)
-        if _haveSelection
-            _doEditAction(_activeEditor,Actions.Paste())
+        _doEditAction(_activeEditor,Actions.Paste())
         
     def menuEditDelete_Click(sender, e as QMenuEventArgs)
         if _haveSelection
             _doEditAction(_activeEditor,Actions.Delete())
 
     def _haveSelection as bool
-        return _activeEditor is not nil and _activeEditor.activeTextAreaControl.textArea.selectionManager.hasSomethingSelected
+        return _activeEditor is not nil and _activeEditor.activeTextAreaControl.textArea.selectionManager.hasSomethingSelected 
 
     def menuEditFind_Click(sender, e as QMenuEventArgs)
         if _activeEditor is nil, return
