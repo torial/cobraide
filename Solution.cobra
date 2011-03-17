@@ -136,7 +136,20 @@ class SolutionTree inherits TreeView
             on "mnuAddProject"
                 pass
             on "mnuRename"
-                pass
+                if .selectedNode == nil or .selectedNode.tag == nil
+                    return
+                fileName = .selectedNode.tag.toString
+                if not System.IO.File.exists(fileName) and fileName <> "New File"
+                    return
+                shortFileName = System.IO.Path.getFileName(fileName) to !
+                if NajaUtils.inputBox("Rename file","Enter a new file name:", inout shortFileName ) == DialogResult.OK
+                    newFileName = System.IO.Path.combine(System.IO.Path.getDirectoryName(fileName),shortFileName)
+                    if fileName <> "New File"
+                        System.IO.File.move(fileName,newFileName)
+                    .selectedNode.tag = newFileName
+                    .selectedNode.text = shortFileName
+                    .selectedNode.name = newFileName
+                
             on "mnuRemoveFile"
                 trace .selectedNode
                 if .selectedNode == nil or  .selectedNode.tag  == nil 
