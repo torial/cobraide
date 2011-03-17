@@ -3,13 +3,216 @@ use System.Windows.Forms from System.Windows.Forms
 use ICSharpCode.TextEditor
 use ICSharpCode.TextEditor.Document
 
+#inspired by the TextEditor sample
+extend Color
+    def halfMix(color2 as Color) as Color
+        return Color.fromArgb((.a + color2.a)>>1,(.r+color2.r)>>1,(.g+color2.g)>>1,(.b+color2.b)>>1)
+
+
+class TextRange inherits AbstractSegment
+    var _document as IDocument
+    cue init(document as IDocument, offset as int, length as int)
+        base.init
+        _document = document
+        .offset = offset
+        .length = length
+
+class TextEditorSearcher implements IDisposable
+    var _document as IDocument?
+    pro document as IDocument?
+        get
+            return _document
+        set
+            if _document <> value
+                .clearScanRegion
+                _document =value
+    
+    var _region as TextMarker?
+    
+    def setScanRegion(sel as ISelection)
+        .setScanRegion(sel.offset, sel.length)
+        
+    def setScanRegion(offset as int, length as int)
+        bgColor = _document.highlightingStrategy.getColorFor("Default").backgroundColor
+        _region = TextMarker(offset,length,TextMarkerType.SolidBlock, bgColor.halfMix(Color.fromArgb(160,160,160)))
+        _document.markerStrategy.addMarker(_region)
+        
+    get hasScanRegion as bool
+        return _region <> nil
+        
+    def clearScanRegion
+        if _region <> nil
+            _document.markerStrategy.removeMarker(_region)
+            _region = nil
+    
+    def dispose
+        .clearScanRegion
+        GC.suppressFinalize(this)
+        
+    get beginOffset as int
+        if _region <> nil
+            return _region.offset
+        else
+            return 0
+            
+    get endOffset as int
+        if _region <> nil
+            return _region.endOffset
+        else
+            return _document.textLength
+            
+    var matchCase as bool
+    var matchWholeWordOnly as bool
+    
+    var _lookFor as String?
+    var _lookFor2 as String? #uppercase in case-insensitive mode
+    pro lookFor from _lookFor
+    
+    
+    
+    def findNext(beginAtOffset as int, searchBackward as bool, loopedAround as out bool) as TextRange?
+        loopedAround = false
+        startAt = .beginOffset
+        endAt = .endOffset
+        curOffs = .inRange(beginAtOffset,startAt,endAt)
+        
+        _lookFor2 = if(.matchCase, _lookFor, _lookFor.toUpperInvariant)
+        
+        result as TextRange?
+        if searchBackward
+            result = .findNextIn(startAt, curOffs, true)
+            if result == nil
+                loopedAround = true
+                result = .findNextIn(curOffs, endAt, true)
+        else
+            result = .findNextIn(curOffs, endAt, false)
+            if result == nil
+                loopedAround = true
+                result = .findNextIn(startAt, curOffs, false)
+        return result
+    
+    sig MatchFirstCh(char1 as char, char2 as char) as bool
+    sig MatchWord(offset as int) as bool
+    
+    def findNextIn(offset1 as int, offset2 as int, searchBackward as bool) as TextRange?
+        offset2 -= _lookFor.length
+        
+        matchFirstCh as MatchFirstCh? = nil
+        matchWord as MatchWord? = nil
+        if .matchCase
+            matchFirstCh = do(lookFor as char, c as char)=lookFor==c
+        else
+            matchFirstCh = do(lookFor as char,c as char)=lookFor== c.toUpperInvariant
+        if .matchWholeWordOnly
+            matchWord = ref .isWholeWordMatch
+        else
+            matchWord = ref .isPartWordMatch
+            
+        lookForCh = _lookFor2[0]
+        if searchBackward
+            for offset as int in offset2:offset1:-1
+                if matchFirstCh(lookForCh, _document.getCharAt(offset)) and matchWord(offset)
+                    return TextRange(_document,offset,_lookFor.length)
+        else
+            for offset as int in offset1:offset2:1
+                if matchFirstCh(lookForCh, _document.getCharAt(offset)) and matchWord(offset)
+                    return TextRange(_document,offset,_lookFor.length)
+        return nil
+        
+    def isWholeWordMatch(offset as int) as bool
+        if .isWordBoundary(offset) and .isWordBoundary(offset + _lookFor.length)
+            return .isPartWordMatch(offset)
+        return false
+    
+    def isWordBoundary(offset as int) as bool
+        return offset <=0 or offset >= _document.textLength or not .isAlphaNumeric(offset-1) or not .isAlphaNumeric(offset)
+    
+    def isAlphaNumeric(offset as int) as bool
+        c = _document.getCharAt(offset)
+        return c.isLetterOrDigit or c == c"_"
+    
+    def isPartWordMatch(offset as int) as bool
+        substr = _document.getText(offset, _lookFor.length)
+        if not .matchCase
+            substr = substr.toUpperInvariant
+        
+        return substr == _lookFor2
+        
+        
+    def inRange(x as int, lo as int, hi as int) as int
+        return if(x < lo,lo,if(x>hi,hi,x))
+        
+
 class FindAndReplaceForm is partial inherits Form
+    var _search = TextEditorSearcher()
+    var _editor as TextEditorControl?
+    var _lastSearchWasBackward as bool
+    
+    pro editor as TextEditorControl?
+        get
+            return _editor
+        set
+            _editor = value
+            _search.document = _editor.document
+            
+    def isInRange(x as int, lo as int, hi as int) as bool
+        return x >= lo and x <= hi
+            
+
     def showFor(editor as TextEditorControl, isReplacing as bool)
-        pass
-    def findNext(unknown as bool, isReverse as bool, errMsg as String)
-        pass
+        .editor = editor
+        _search.clearScanRegion
+        sm = editor.activeTextAreaControl.selectionManager
+        if sm.hasSomethingSelected and sm.selectionCollection.count == 1
+            sel = sm.selectionCollection[0]
+            if sel.startPosition.line == sel.endPosition.line
+                .txtFind.text = sm.selectedText
+            else
+                _search.setScanRegion(sel)
+        else
+            caret = editor.activeTextAreaControl.caret
+            start = TextUtilities.findWordStart(editor.document, caret.offset)
+            endAt = TextUtilities.findWordEnd(editor.document,caret.offset)
+            .txtFind.text = editor.document.getText(start,endAt-start)
+        
+        .owner = editor.topLevelControl to Form
+        .show
+        .txtFind.selectAll
+        .txtFind.focus
+        
+    def findNext(viaF3 as bool, isReverse as bool, msgIfNotFound as String) as TextRange?
+        if String.isNullOrEmpty(.txtFind.text)
+            MessageBox.show("No string specified to look for!")
+            return nil
+        _lastSearchWasBackward = isReverse
+        _search.lookFor = .txtFind.text
+        _search.matchCase = false #TODO: Add checkbox
+        _search.matchWholeWordOnly = false #TODO: Add checkbox
+        
+        caret  = _editor.activeTextAreaControl.caret
+        if viaF3 and _search.hasScanRegion and not .isInRange(caret.offset,_search.beginOffset, _search.endOffset)
+            _search.clearScanRegion
+        
+        startFrom = caret.offset - if(isReverse,1,0)
+        range = _search.findNext(startFrom,isReverse, out _lastSearchLoopedAround)
+        if range <> nil
+            .selectResult(range)
+        else if msgIfNotFound <> ""
+            MessageBox.show(msgIfNotFound)
+        return range
+        
+    def selectResult(range as TextRange)
+        p1 = _editor.document.offsetToPosition(range.offset)
+        p2 = _editor.document.offsetToPosition(range.offset + range.length)
+        _editor.activeTextAreaControl.selectionManager.setSelection(p1,p2)
+        _editor.activeTextAreaControl.scrollTo(p1.line,p1.column)
+        _editor.activeTextAreaControl.caret.position = _editor.document.offsetToPosition(range.offset + range.length)
+        
     
     pro lookFor from var= ""
+    
+    def btnFindClicked(sender, e as EventArgs)
+        .findNext(false, false, "Text not found")
     
 #Autogenerated UI Form
 #To use:
@@ -18,61 +221,61 @@ class FindAndReplaceForm is partial inherits Form
 
 
 class FindAndReplaceForm is partial 
-	var lblFind as System.Windows.Forms.Label
-	var txtFind as System.Windows.Forms.TextBox
-	var btnFind as System.Windows.Forms.Button
+    var lblFind as System.Windows.Forms.Label
+    var txtFind as System.Windows.Forms.TextBox
+    var btnFind as System.Windows.Forms.Button
 
     cue init
         base.init
         .initializeComponent
 
-	def initializeComponent
-	#Instantiate the components
-		.lblFind = System.Windows.Forms.Label()
-		.txtFind = System.Windows.Forms.TextBox()
-		.btnFind = System.Windows.Forms.Button()
-		
-		#Now initialize the components
-		
-		##############################
-		# findAndReplaceForm
-		##############################
-		
-		.width = 473
-		.height = 173
-		.text = 'Find and Replace'
-		.name = 'FindAndReplaceForm'
-		
-		##############################
-		# lblFind
-		##############################
-		
-		.lblFind.text = 'Find:'
-		.lblFind.size = Size(100,23)
-		.lblFind.location = Point(20,20)
-		.lblFind.name = 'lblFind'
-		.lblFind.autoSize = true
-		
-		##############################
-		# txtFind
-		##############################
-		
-		.txtFind.text = ''
-		.txtFind.size = Size(100,20)
-		.txtFind.location = Point(64,18)
-		.txtFind.width = 384
-		.txtFind.name = 'txtFind'
-		
-		##############################
-		# btnFind
-		##############################
-		
-		.btnFind.text = 'Find'
-		.btnFind.size = Size(75,23)
-		.btnFind.location = Point(352,64)
-		.btnFind.useVisualStyleBackColor = true
-		.btnFind.width = 96
-		.btnFind.name = 'btnFind'
-		
-		#Add the components to their parent control
-		.controls.addRange(@[.btnFind,.txtFind,.lblFind])
+    def initializeComponent
+    #Instantiate the components
+        .lblFind = System.Windows.Forms.Label()
+        .txtFind = System.Windows.Forms.TextBox()
+        .btnFind = System.Windows.Forms.Button()
+        
+        #Now initialize the components
+        
+        ##############################
+        # findAndReplaceForm
+        ##############################
+        
+        .width = 473
+        .height = 173
+        .text = 'Find and Replace'
+        .name = 'FindAndReplaceForm'
+        
+        ##############################
+        # lblFind
+        ##############################
+        
+        .lblFind.text = 'Find:'
+        .lblFind.size = Size(100,23)
+        .lblFind.location = Point(20,20)
+        .lblFind.name = 'lblFind'
+        .lblFind.autoSize = true
+        
+        ##############################
+        # txtFind
+        ##############################
+        
+        .txtFind.text = ''
+        .txtFind.size = Size(100,20)
+        .txtFind.location = Point(64,18)
+        .txtFind.width = 384
+        .txtFind.name = 'txtFind'
+        
+        ##############################
+        # btnFind
+        ##############################
+        
+        .btnFind.text = 'Find'
+        .btnFind.size = Size(75,23)
+        .btnFind.location = Point(352,64)
+        .btnFind.useVisualStyleBackColor = true
+        .btnFind.width = 96
+        .btnFind.name = 'btnFind'
+        listen .btnFind.click, ref .btnFindClicked
+        #Add the components to their parent control
+        .controls.addRange(@[.btnFind,.txtFind,.lblFind])
