@@ -66,7 +66,7 @@ class Naja is partial
         content.appendLine
         content.appendLine
 
-        currentIndent = "\t"
+        currentIndent = "    "
         formName = "GeneratedForm"
 
         declarations = StringBuilder()
@@ -92,7 +92,7 @@ class Naja is partial
         content.appendLine("def initializeComponent")
 
         content.append(currentIndent)
-        currentIndent = "\t\t"
+        currentIndent = "        "
         content.appendLine("#Instantiate the components")
         for component in .currentComponents.keys
             content.append(currentIndent)

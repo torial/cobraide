@@ -9,6 +9,7 @@ use System.ComponentModel.Design from System.Design
 use System.Drawing
 use System.Drawing.Design
 use System.Diagnostics
+use System.Text.RegularExpressions
 use pF.DesignSurfaceExt from "DesignSurfaceExt2"
 use pF.DesignSurfaceManagerExt from "DesignSurfaceManagerExt"
 use Cobra.Lang.Compiler
@@ -16,9 +17,10 @@ use Cobra.Lang.Compiler
 class Naja is partial inherits Form
     var _editorSettings as ITextEditorProperties?
     var _findForm = FindAndReplaceForm()
-    
+    #TODO: Test the task list load
+    #TODO: Add support for update of task list on save.
     var _properties as PropertyGrid #
-
+    var _tasks as Tasks
     #var _toolStrip as ToolStrip #
     var _menuStrip as QMainMenu #
     var _menuFile as QMenuItem #
@@ -120,9 +122,13 @@ class Naja is partial inherits Form
         _itemProperties.selectedObject = projectWindow
         _leftDock = QDockBar(parent=this,name="_leftDock",dock=DockStyle.Left)
         _bottomDock = QDockBar(parent=this,name="_bottomDock",dock=DockStyle.Bottom)
+        
+        _tasks =tasks = Tasks(name="tasks", dock=DockStyle.Fill, dock=DockStyle.Fill,height=200,text="Tasks")
+        tasks.owner = this
+        tasks.dockWindow(_bottomDock)
         _ioWindow = ioWindow = QDockingWindow(name="IO",dock=DockStyle.Fill,height=200,text="I/O")
         ioWindow.owner = this
-        ioWindow.dockWindow(_bottomDock)
+        ioWindow.dockWindow(tasks,QDockOrientation.Vertical,false)
         ioWindow.slideWindow(true,false)
         _lblOutput = RichTextBox(parent=ioWindow, dock=DockStyle.Fill,name="_lblOutput",autoSize=false,backColor=Color.white, borderStyle = System.Windows.Forms.BorderStyle.FixedSingle, height=400,readOnly=true)
         _lblOut = Label(parent=ioWindow, dock=DockStyle.Top,name="_lblOut",autoSize=true,text="Output:")
@@ -459,8 +465,21 @@ class Naja is partial inherits Form
         _projectTree.solution.fileName = "" #force Save As    
         _projectTree.solution.save
         
+    var _reTODO = Regex("#\s*TODO:",RegexOptions(Compiled,IgnoreCase))
+    
     def menuFileProjectOpen_Click(sender, e as QMenuEventArgs)
         _projectTree.solution = Solution.load(NajaUtils.promptForOpenFileName("Cobra Solution files|*.cobrasln"))
+        _tasks.clearTasks
+        for p in _projectTree.solution.projects
+            for f in p.files
+                if not System.IO.File.exists(f), continue
+                lineNum = 1
+                for line in System.IO.File.readAllLines(f)
+                    if not _reTODO.isMatch(line), continue
+                    task = _reTODO.split(line)[1]
+                    _tasks.addTask(task,"File:[System.IO.Path.getFileName(f)], Line:[lineNum]")
+                    lineNum +=1
+                    
         
     def menuFileProjectNew_Click(sender, e as QMenuEventArgs)
         pass

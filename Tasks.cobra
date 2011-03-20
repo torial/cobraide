@@ -1,0 +1,128 @@
+use System
+use System.Collections
+use System.ComponentModel
+use System.Drawing
+use System.Data
+use System.Windows.Forms
+
+use Qios.DevSuite.Components
+
+class Tasks inherits QDockingWindow
+
+    var listView1 as System.Windows.Forms.ListView
+    var qPanel1 as Qios.DevSuite.Components.QPanel 
+    var chTaskName as System.Windows.Forms.ColumnHeader
+    var chTaskLocation as System.Windows.Forms.ColumnHeader
+    var imageList1 as System.Windows.Forms.ImageList 
+    var components as System.ComponentModel.IContainer
+
+    cue init
+        base.init
+    
+        # This call is required by the Windows.Forms Form Designer.
+        .initializeComponent
+
+        #Because Task windows are created on demand, be sure it always has a unique guid.
+        .persistGuid = Guid.newGuid
+    
+
+    # <summary> 
+    # Clean up any resources being used.
+    # </summary>
+    def dispose(  disposing as bool) is protected, override
+    
+        if disposing
+            .components.dispose
+        base.dispose( disposing )
+    
+    def clearTasks
+        .listView1.items.clear
+
+    def addTask(task as String, location as String)
+        item = ListViewItem(task,0)
+        item.subItems.add(location)
+        .listView1.items.add(item)
+        
+    def addTask(task as String)
+        .listView1.items.add(ListViewItem(task,0))
+
+    #region Component Designer generated code
+    # <summary> 
+    # Required method for Designer support - do not modify 
+    # the contents of this method with the code editor.
+    # </summary>
+    def initializeComponent is private
+        .components = System.ComponentModel.Container()
+        listViewItem1 = System.Windows.Forms.ListViewItem("Task number one", 0)
+        listViewItem2 = System.Windows.Forms.ListViewItem("Task number two", 0)
+        listViewItem3 = System.Windows.Forms.ListViewItem("Task number three", 0)
+        .listView1 = System.Windows.Forms.ListView()
+        .chTaskName = System.Windows.Forms.ColumnHeader()
+        .chTaskLocation = System.Windows.Forms.ColumnHeader()
+        .imageList1 = System.Windows.Forms.ImageList(.components)
+        .qPanel1 = Qios.DevSuite.Components.QPanel()
+        .qPanel1.suspendLayout
+        .suspendLayout
+        # 
+        # listView1
+        # 
+        .listView1.borderStyle = System.Windows.Forms.BorderStyle.None
+        .listView1.checkBoxes = true
+        .listView1.columns.addRange(@[.chTaskName,.chTaskLocation])
+        .listView1.dock = System.Windows.Forms.DockStyle.Fill
+        .listView1.fullRowSelect = true
+        .listView1.gridLines = true
+        listViewItem1.stateImageIndex = 0
+        listViewItem2.stateImageIndex = 0
+        listViewItem3.stateImageIndex = 0
+        .listView1.items.addRange(@[listViewItem1,listViewItem2,listViewItem3])
+        .listView1.location = System.Drawing.Point(0, 0)
+        .listView1.name = "listView1"
+        .listView1.size = System.Drawing.Size(572, 82)
+        .listView1.smallImageList = .imageList1
+        .listView1.tabIndex = 0
+        .listView1.view = System.Windows.Forms.View.Details
+        # 
+        # chTaskName
+        # 
+        .chTaskName.text = "Description"
+        .chTaskName.width = 528
+        # 
+        # chTaskLocation
+        # 
+        .chTaskLocation.text = "Location"
+        .chTaskLocation.width = 200
+        # 
+        # imageList1
+        # 
+        .imageList1.imageSize = System.Drawing.Size(16, 16)
+        .imageList1.images.add(Icon("Tasks.ico") )
+        .imageList1.transparentColor = System.Drawing.Color.transparent
+        # 
+        # qPanel1
+        # 
+        .qPanel1.appearance.backgroundStyle = Qios.DevSuite.Components.QColorStyle.Solid
+        .qPanel1.controls.add(.listView1)
+        .qPanel1.dock = System.Windows.Forms.DockStyle.Fill
+        .qPanel1.location = System.Drawing.Point(5, 5)
+        .qPanel1.minimumClientSize = System.Drawing.Size(20, 20)
+        .qPanel1.name = "qPanel1"
+        .qPanel1.size = System.Drawing.Size(574, 84)
+        .qPanel1.tabIndex = 1
+        .qPanel1.text = "qPanel1"
+        # 
+        # QdwTasks
+        # 
+        .autoScroll = true
+        .controls.add(.qPanel1)
+        .dockPadding.all = 5
+        .icon =  Icon("Tasks.ico")
+        .name = "QdwTasks"
+        .size = System.Drawing.Size(584, 112)
+        .text = "Tasks"
+        .createNew = true
+        .qPanel1.resumeLayout(false)
+        .resumeLayout(false)
+
+    
+    #endregion
