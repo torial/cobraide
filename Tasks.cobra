@@ -15,6 +15,9 @@ class Tasks inherits QDockingWindow
     var chTaskLocation as System.Windows.Forms.ColumnHeader
     var imageList1 as System.Windows.Forms.ImageList 
     var components as System.ComponentModel.IContainer
+    
+    sig LocationHandler(fileName as String, lineNumber as int)
+    event TaskSelected as LocationHandler
 
     cue init
         base.init
@@ -46,6 +49,15 @@ class Tasks inherits QDockingWindow
     def addTask(task as String)
         .listView1.items.add(ListViewItem(task,0))
 
+    def list_Clicked(sender, e as EventArgs)
+        #if .TaskSelected <> nil
+        location = .listView1.selectedItems[0].subItems[1].text
+        if not location.contains(","), return
+        locations = location.split(c',')
+        file = locations[0].replace("File:","")
+        lineNum = int.parse(locations[1].replace("Line:",""))
+        raise .TaskSelected, file,lineNum
+
     #region Component Designer generated code
     # <summary> 
     # Required method for Designer support - do not modify 
@@ -53,9 +65,6 @@ class Tasks inherits QDockingWindow
     # </summary>
     def initializeComponent is private
         .components = System.ComponentModel.Container()
-        listViewItem1 = System.Windows.Forms.ListViewItem("Task number one", 0)
-        listViewItem2 = System.Windows.Forms.ListViewItem("Task number two", 0)
-        listViewItem3 = System.Windows.Forms.ListViewItem("Task number three", 0)
         .listView1 = System.Windows.Forms.ListView()
         .chTaskName = System.Windows.Forms.ColumnHeader()
         .chTaskLocation = System.Windows.Forms.ColumnHeader()
@@ -72,16 +81,13 @@ class Tasks inherits QDockingWindow
         .listView1.dock = System.Windows.Forms.DockStyle.Fill
         .listView1.fullRowSelect = true
         .listView1.gridLines = true
-        listViewItem1.stateImageIndex = 0
-        listViewItem2.stateImageIndex = 0
-        listViewItem3.stateImageIndex = 0
-        .listView1.items.addRange(@[listViewItem1,listViewItem2,listViewItem3])
         .listView1.location = System.Drawing.Point(0, 0)
         .listView1.name = "listView1"
         .listView1.size = System.Drawing.Size(572, 82)
         .listView1.smallImageList = .imageList1
         .listView1.tabIndex = 0
         .listView1.view = System.Windows.Forms.View.Details
+        listen .listView1.itemActivate, ref .list_Clicked
         # 
         # chTaskName
         # 
@@ -117,7 +123,7 @@ class Tasks inherits QDockingWindow
         .controls.add(.qPanel1)
         .dockPadding.all = 5
         .icon =  Icon("Tasks.ico")
-        .name = "QdwTasks"
+        .name = "Tasks"
         .size = System.Drawing.Size(584, 112)
         .text = "Tasks"
         .createNew = true

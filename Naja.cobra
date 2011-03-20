@@ -124,14 +124,27 @@ class Naja is partial inherits Form
         _bottomDock = QDockBar(parent=this,name="_bottomDock",dock=DockStyle.Bottom)
         
         _tasks =tasks = Tasks(name="tasks", dock=DockStyle.Fill, dock=DockStyle.Fill,height=200,text="Tasks")
+        listen tasks.TaskSelected, ref .taskSelected
         tasks.owner = this
         tasks.dockWindow(_bottomDock)
         _ioWindow = ioWindow = QDockingWindow(name="IO",dock=DockStyle.Fill,height=200,text="I/O")
         ioWindow.owner = this
-        ioWindow.dockWindow(tasks,QDockOrientation.Vertical,false)
+        ioWindow.dockWindow(tasks,QDockOrientation.Horizontal,false)
         ioWindow.slideWindow(true,false)
         _lblOutput = RichTextBox(parent=ioWindow, dock=DockStyle.Fill,name="_lblOutput",autoSize=false,backColor=Color.white, borderStyle = System.Windows.Forms.BorderStyle.FixedSingle, height=400,readOnly=true)
         _lblOut = Label(parent=ioWindow, dock=DockStyle.Top,name="_lblOut",autoSize=true,text="Output:")
+    
+    def taskSelected(fileName as String, lineNumber as int)
+        #make sure we've got the full path
+        #TODO: Handle scenario of multiple results.  For now, it just assumes a single match.
+        fileNodes = _projectTree.findNodes(fileName)
+        if fileNodes.count ==0, return
+        fileNode = fileNodes[0]
+        fileName = fileNode.tag.toString
+        
+        #TODO: Check if the file is already open
+        editor = .open(fileName)
+        editor.activeTextAreaControl.textArea.scrollTo(lineNumber)
     
     def solutionDoubleClicked(sender, e as System.EventArgs)
         if _projectTree.selectedNode == nil or  _projectTree.selectedNode.tag == nil 
@@ -473,12 +486,12 @@ class Naja is partial inherits Form
         for p in _projectTree.solution.projects
             for f in p.files
                 if not System.IO.File.exists(f), continue
-                lineNum = 1
+                lineNum = 0
                 for line in System.IO.File.readAllLines(f)
+                    lineNum +=1
                     if not _reTODO.isMatch(line), continue
                     task = _reTODO.split(line)[1]
                     _tasks.addTask(task,"File:[System.IO.Path.getFileName(f)], Line:[lineNum]")
-                    lineNum +=1
                     
         
     def menuFileProjectNew_Click(sender, e as QMenuEventArgs)
@@ -503,11 +516,12 @@ class Naja is partial inherits Form
         if fileName <> ""
             .open(fileName)
         
-    def open(fileName as String)
-        .setEditorText(fileName)
+    def open(fileName as String) as TextEditorControl?
+        editor = .setEditorText(fileName)
         
         if _activeEditor is not nil and _activeEditor.document.textLength and String.isNullOrEmpty(_activeEditor.fileName)
             _removeTextEditor(_activeEditor to !)
+        return editor
             
     def menuClose_Click(sender, e as QMenuEventArgs)
         if _activeEditor is not nil
@@ -528,7 +542,7 @@ class Naja is partial inherits Form
                     if not .saveAsChanges(editor)
                         e.cancel = true
 
-    def setEditorText(fileName as String)
+    def setEditorText(fileName as String) as TextEditorControl?
         editor = _addNewEditor("[System.IO.Path.getFileName(fileName)]")
         try
             editor.loadFile(fileName)
@@ -536,10 +550,11 @@ class Naja is partial inherits Form
         catch ex as Exception
             MessageBox.show(ex.message,ex.typeOf.name)
             _removeTextEditor(editor)
-            return
+            return nil
         #editor.tag = fileName
         editor.document.foldingManager.foldingStrategy = CobraFoldingStrategy()
         editor.document.foldingManager.updateFoldings(nil,nil)
+        return editor
     
     def isModified(editor as TextEditorControl) as bool
         return editor.parent.text.endsWith("*")

@@ -64,6 +64,22 @@ class SolutionTree inherits TreeView
         _components =System.ComponentModel.Container()
         _initializeContextMenu
 
+    def findNodes(text as String) as List<of TreeNode>
+        return .findNodes(.nodes[0],text)
+        
+        
+    def findNodes(root as TreeNode, text as String) as List<of TreeNode>
+        result = List<of TreeNode>()
+        if root.text.toUpper==text.toUpper
+            result.add(root)
+        
+        for node in root.nodes
+            subNodes = .findNodes(node, text)
+            if subNodes.count >0
+                result.addRange(subNodes)
+                
+        return result
+
     def _initializeContextMenu
         _contextMenu = QContextMenu(_components)
         mnuAddReference = QMenuItem()
@@ -160,8 +176,6 @@ class SolutionTree inherits TreeView
                 .removeFile(.selectedNode to !, _solutionNode.nodes[0] to !)
             on "mnuNewFile2"
                 pass
-
-
 
     def _initializeSolutionNodes
         .nodes.clear
