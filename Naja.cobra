@@ -17,9 +17,9 @@ use Cobra.Lang.Compiler
 class Naja is partial inherits Form
     var _editorSettings as ITextEditorProperties?
     var _findForm = FindAndReplaceForm()
-    #TODO: Test the task list load
+    #DONE: Test the task list load
     #TODO: Add support for update of task list on save.
-    var _properties as PropertyGrid #
+    #var _properties as PropertyGrid #
     var _tasks as Tasks
     #var _toolStrip as ToolStrip #
     var _menuStrip as QMainMenu #
@@ -55,7 +55,7 @@ class Naja is partial inherits Form
     var _ioWindow as QDockingWindow
     
     var _projectTree as SolutionTree
-    var _itemProperties as PropertyGrid
+    #var _itemProperties as PropertyGrid
    
     var _tabs as QTabControl #
     var _tabTest as QTabPage  #
@@ -66,6 +66,7 @@ class Naja is partial inherits Form
     var _chkBracketMatching as CheckBox
     var _chkEnableVirtualSpace as CheckBox
     var _chkShowLineNumbers as CheckBox
+    var _cboCompileTarget as ComboBox
     
     var _components as System.ComponentModel.IContainer? #
     
@@ -77,14 +78,15 @@ class Naja is partial inherits Form
     
     def _activeEditor as TextEditorControl?
         if _tabs.controls.count == 0, return nil
+        if _tabs.activeTabPage == nil or _tabs.activeTabPage.controls.count == 0, return nil
         return _tabs.activeTabPage.controls[0] to TextEditorControl?
     
     #region test
     cue init
         base.init
-        .text = "Cobra Editor"
-        .width = 800
-        .height = 600
+        .text = "Naja - Cobra IDE"
+        .width = 1000
+        .height = 800
         .isMdiContainer = true
         _components = System.ComponentModel.Container()
         listen .formClosing, ref _formClosing
@@ -113,13 +115,14 @@ class Naja is partial inherits Form
         _projectTree.addReference("Cobra.Lang.dll",pj)
         _projectTree.addFile("New File",pj)
         
-        propertiesWindow = QDockingWindow(name="propertiesWindow",dock=DockStyle.Bottom,width=200, text="Properties")
-        propertiesWindow.canDockOnOtherControlBottom = true
-        propertiesWindow.owner = this
-        propertiesWindow.dockWindow(_rightDock)
-        projectWindow.dockWindow(propertiesWindow,QDockOrientation.Vertical,false)
-        _itemProperties = PropertyGrid(parent=propertiesWindow,dock=DockStyle.Fill,name="_itemProperties")
-        _itemProperties.selectedObject = projectWindow
+        #propertiesWindow = QDockingWindow(name="propertiesWindow",dock=DockStyle.Bottom,width=200, text="Properties")
+        #propertiesWindow.canDockOnOtherControlBottom = true
+        #propertiesWindow.owner = this
+        #propertiesWindow.dockWindow(_rightDock)
+        projectWindow.dockWindow(_rightDock)
+        #projectWindow.dockWindow(propertiesWindow,QDockOrientation.Vertical,false)
+        #_itemProperties = PropertyGrid(parent=propertiesWindow,dock=DockStyle.Fill,name="_itemProperties")
+        #_itemProperties.selectedObject = projectWindow
         _leftDock = QDockBar(parent=this,name="_leftDock",dock=DockStyle.Left)
         _bottomDock = QDockBar(parent=this,name="_bottomDock",dock=DockStyle.Bottom)
         
@@ -129,7 +132,7 @@ class Naja is partial inherits Form
         tasks.dockWindow(_bottomDock)
         _ioWindow = ioWindow = QDockingWindow(name="IO",dock=DockStyle.Fill,height=200,text="I/O")
         ioWindow.owner = this
-        ioWindow.dockWindow(tasks,QDockOrientation.Horizontal,false)
+        ioWindow.dockWindow(tasks,QDockOrientation.Tabbed,false)
         ioWindow.slideWindow(true,false)
         _lblOutput = RichTextBox(parent=ioWindow, dock=DockStyle.Fill,name="_lblOutput",autoSize=false,backColor=Color.white, borderStyle = System.Windows.Forms.BorderStyle.FixedSingle, height=400,readOnly=true)
         _lblOut = Label(parent=ioWindow, dock=DockStyle.Top,name="_lblOut",autoSize=true,text="Output:")
@@ -229,9 +232,14 @@ class Naja is partial inherits Form
         listen _chkEnableVirtualSpace.checkedChanged, ref _checkedSettingChanged
         _chkShowLineNumbers = CheckBox(parent=_tabConfig,top=135,width=200,text="Show Line Numbers",name="ShowLineNumbers")
         listen _chkShowLineNumbers.checkedChanged, ref _checkedSettingChanged
+        
+        lblCompileTarget=Label(parent=_tabConfig,top=160,autoSize=true,text="Compile Target:",name="lblCompileTarget")
+        _cboCompileTarget = ComboBox(parent=_tabConfig, top=160,width=150, left=lblCompileTarget.left + lblCompileTarget.width + 5,name="_cboCompileTarget")
+        _cboCompileTarget.items.addRange(@["WinEXE","EXE","Lib","Module"])
+        _cboCompileTarget.selectedIndex = 0
 
-        _properties = PropertyGrid(parent=_tabConfig,dock=DockStyle.Right,name="_properties",selectedObject=_projectTree,width=300)
-        _addNewEditor("New file")
+        #_properties = PropertyGrid(parent=_tabConfig,dock=DockStyle.Right,name="_properties",selectedObject=_projectTree,width=300)
+        #_addNewEditor("New file")
         _tabs.controls.add(_tabTest)
         _tabs.controls.add(_tabConfig)
 
@@ -418,6 +426,17 @@ class Naja is partial inherits Form
     def menuCompileRun_Click(sender, e as QMenuEventArgs)
         .runCobraProcess(" -d ")
         
+        /#
+             'name': 'target', 
+419             'synonyms': ['t'], 
+420             'description': 'Build a specific target.', 
+421             'type': 'menu', 
+422             'choices': ['exe', 'winexe', 'lib', 'module'], 
+423             'args': 'exe|winexe|lib|module', 
+424             'platforms': ['.net'], 
+        
+        #/
+        
     var _p as Process?
     def runCobraProcess(args as  String)
         if _p is not nil, return #can't run a second compile process!
@@ -431,12 +450,16 @@ class Naja is partial inherits Form
         p.enableRaisingEvents = true
         fileArgs = ""
         curProj = _projectTree.solution.projects[0]
-        if _activeEditor == nil
+        if _activeEditor == nil or curProj.files.contains(_activeEditor.fileName)
             fileArgs = String.join(" ", curProj.files.toArray) to !
-        else if curProj.files.contains(_activeEditor.fileName)
-            fileArgs = String.join(" ", curProj.files.toArray) to !
+            refArgs = String.join(" -ref:",curProj.references.toArray) to !
+            if refArgs.length > 0
+                refArgs = " -ref:" + refArgs
+                fileArgs += refArgs
         else
             fileArgs = _activeEditor.fileName to !
+            
+        args += " -t:" + _cboCompileTarget.selectedItem.toString.toLower
         p.startInfo.arguments = args + " " + fileArgs
         .logIO(p.startInfo.fileName + " " + p.startInfo.arguments,Color.blue)
         listen p.outputDataReceived, ref .outputDataReceived
@@ -461,6 +484,11 @@ class Naja is partial inherits Form
         _lblOutput.selectionColor = color
         _lblOutput.selectionLength=0
         _lblOutput.appendText("\r\n")
+        _lblOutput.selectionLength = 0
+        _lblOutput.selectionStart = _lblOutput.textLength
+        
+        _lblOutput.scrollToCaret   
+        
         
     def processExited(sender, e as EventArgs)
         .logIO("Process Exited\r\n",Color.black)

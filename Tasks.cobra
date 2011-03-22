@@ -92,12 +92,12 @@ class Tasks inherits QDockingWindow
         # chTaskName
         # 
         .chTaskName.text = "Description"
-        .chTaskName.width = 528
+        .chTaskName.width = 628
         # 
         # chTaskLocation
         # 
         .chTaskLocation.text = "Location"
-        .chTaskLocation.width = 200
+        .chTaskLocation.width = 800
         # 
         # imageList1
         # 
