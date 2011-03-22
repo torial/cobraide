@@ -145,12 +145,12 @@ class SolutionTree inherits TreeView
                 newFile = NajaUtils.promptForOpenFileName       
                 if newFile == "", return
                 .addFile(newFile, _solutionNode.nodes[0] to !)
-            on "mnuNewFile"
-                pass
-            on "mnuNewProject"
-                pass
-            on "mnuAddProject"
-                pass
+            #on "mnuNewFile"
+            #    pass
+            #on "mnuNewProject"
+            #    pass
+            #on "mnuAddProject"
+            #    pass
             on "mnuRename"
                 if .selectedNode == nil or .selectedNode.tag == nil
                     return
@@ -174,8 +174,12 @@ class SolutionTree inherits TreeView
                 if not System.IO.File.exists(fileName) and fileName <> "New File"
                     return
                 .removeFile(.selectedNode to !, _solutionNode.nodes[0] to !)
-            on "mnuNewFile2"
-                pass
+            on "mnuAddReference"
+                newFile = NajaUtils.promptForOpenFileName("DLL files (*.dll)|*.dll")
+                if newFile =="", return
+                .addReference(newFile, _solutionNode.nodes[0] to !)
+            else
+                MessageBox.show("Not implemented yet!")
 
     def _initializeSolutionNodes
         .nodes.clear
@@ -202,7 +206,7 @@ class SolutionTree inherits TreeView
         for reference in project.references
             prefix = ""
             if reference in ["mscorlib.dll","System.dll","Cobra.Lang.dll"], prefix = "DEFAULT|"
-            references.nodes.add(TreeNode(name=prefix + reference, text=reference.replace(".dll","") ))
+            references.nodes.add(TreeNode(name=prefix+reference,text=System.IO.Path.getFileName(reference).replace(".dll","") + " ",tag=reference))
         
         #files
         files = TreeNode(name="Files|[project.name]",text="Files")
@@ -231,7 +235,7 @@ class SolutionTree inherits TreeView
         .solution.projects.remove(projectNode.tag to Project)
         
     def addReference(reference as String,projectNode as TreeNode) as TreeNode
-        referenceNode = TreeNode(name=reference,text=reference.replace(".dll","") + " ")
+        referenceNode = TreeNode(name=reference,text=System.IO.Path.getFileName(reference).replace(".dll","") + " ",tag=reference)
         projectNode.nodes["References|[(projectNode.tag to Project).name]"].nodes.add(referenceNode)
         (projectNode.tag to Project).references.add(reference)
         return referenceNode
