@@ -457,6 +457,8 @@ class Naja is partial inherits Form
                 refArgs = " -ref:" + refArgs
                 fileArgs += refArgs
         else
+            if _activeEditor.fileName == nil
+                if not .saveChanges(_activeEditor to !), return
             fileArgs = _activeEditor.fileName to !
             
         args += " -t:" + _cboCompileTarget.selectedItem.toString.toLower
@@ -612,7 +614,7 @@ class Naja is partial inherits Form
         
     
     def saveAsChanges(editor as TextEditorControl) as bool
-        fileName = NajaUtils.promptForSaveAsFileName(editor.fileName)
+        fileName = NajaUtils.promptForSaveAsFileName(editor.fileName?"")
         if fileName.length <> 0
             try
                 editor.saveFile(fileName)
@@ -708,6 +710,26 @@ enum BackEnd
 
 class Program
 
+    var errorFile as String? is shared
+
     def main is shared
         has STAThread
+        Application.enableVisualStyles
+        Application.setCompatibleTextRenderingDefault(false)
+        Application.setUnhandledExceptionMode(UnhandledExceptionMode.CatchException)
+        
+        .errorFile = System.IO.Path.combine(Application.startupPath,"Naja.Errors.log")
+        listen Application.threadException, ref .application_threadException
+        listen AppDomain.currentDomain.unhandledException, ref .currentDomain_unhandledException
+        
         Application.run(Naja())
+        
+    def application_threadException(sender, e as System.Threading.ThreadExceptionEventArgs) is shared
+        .log(e.exception to !)
+        
+    def currentDomain_unhandledException(sender, e as UnhandledExceptionEventArgs) is shared
+        .log(e.exceptionObject to Exception)
+        
+        
+    def log(ex as Exception) is shared
+        System.IO.File.appendAllText(.errorFile,ex.toString)
