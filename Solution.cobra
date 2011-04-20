@@ -16,7 +16,7 @@ class Solution
         if .fileName == ""
             dlg = SaveFileDialog()
             dlg.fileName = .fileName
-            dlg.filter = "Cobra Solution files|*.cobrasln"
+            dlg.filter = "Naja Solution files|*.najasln"
             dlg.filterIndex = 1
             if dlg.showDialog == DialogResult.OK
                 .fileName = dlg.fileName to !

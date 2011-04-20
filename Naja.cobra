@@ -19,6 +19,14 @@ class Naja is partial inherits Form
     var _findForm = FindAndReplaceForm()
     #DONE: Test the task list load
     #TODO: Add support for update of task list on save.
+    #TODO: Add a build.bat file
+    #TODO: Preserve tabs instead of replacing w/ 4 spaces
+    #TODO: IO Window closes when a process is done.  Perhaps "Process Exited" in I/O could give the exit code.
+    #TODO: Save as, followed by cancel complains of empty path.
+    #TODO: File->Open, no All Files... filter (or similar)
+    #TODO: GAC Wrapper: http://blogs.msdn.com/b/junfeng/archive/2004/09/14/229649.aspx
+    #TODO: ReflectionOnlyLoad for Auto Complete logic: http://msdn.microsoft.com/en-us/library/0et80c7k(v=VS.80).aspx
+    #
     #var _properties as PropertyGrid #
     var _tasks as Tasks
     #var _toolStrip as ToolStrip #
@@ -511,7 +519,7 @@ class Naja is partial inherits Form
     var _reTODO = Regex("#\s*TODO:",RegexOptions(Compiled,IgnoreCase))
     
     def menuFileProjectOpen_Click(sender, e as QMenuEventArgs)
-        _projectTree.solution = Solution.load(NajaUtils.promptForOpenFileName("Cobra Solution files|*.cobrasln"))
+        _projectTree.solution = Solution.load(NajaUtils.promptForOpenFileName("Naja Solution files|*.najasln"))
         _tasks.clearTasks
         for p in _projectTree.solution.projects
             for f in p.files
