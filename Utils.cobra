@@ -3,7 +3,7 @@ use System.Drawing
 
 class NajaUtils
     def promptForOpenFileName as String is shared
-        return .promptForOpenFileName("Cobra files|*.cobra")
+        return .promptForOpenFileName("Cobra files (*.cobra)|*.cobra|C# files (*.cs)|*.cs")
     
     def promptForOpenFileName(filter as String) as String is shared
         dlg = OpenFileDialog()
@@ -14,7 +14,7 @@ class NajaUtils
         return ""
         
     def promptForSaveAsFileName(startFileName as String) as String is shared
-        return .promptForSaveAsFileName(startFileName, "Cobra files|*.cobra")
+        return .promptForSaveAsFileName(startFileName, "Cobra files (*.cobra)|*.cobra|C# files (*.cs)|*.cs")
         
     def promptForSaveAsFileName(startFileName as String,filter as String) as String is shared
         dlg = SaveFileDialog()
