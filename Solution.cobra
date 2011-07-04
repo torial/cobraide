@@ -31,12 +31,11 @@ class Solution
         
     def load(fileName as String) as Solution is shared
         try
-            
-            result = fastJSON.JSON.instance.toObject(System.IO.File.readAllText(fileName)) to Solution
+            result = fastJSON.JSON.instance.toObject(System.IO.File.readAllText(fileName),Solution.getType) to Solution
             result.fileName = fileName #just in case it got overwritten in the deserialization
             return result
         catch ex as Exception
-            MessageBox.show(ex.message, ex.typeOf.name)
+            MessageBox.show(ex.toString, ex.typeOf.name)
             return Solution()
 
 class SolutionTree inherits TreeView
@@ -282,7 +281,7 @@ class Project
     def load(fileName as String) as Project is shared
         try
             
-            result = fastJSON.JSON.instance.toObject(System.IO.File.readAllText(fileName)) to Project
+            result = fastJSON.JSON.instance.toObject(System.IO.File.readAllText(fileName),Project) to Project
             result.fileName = fileName #just in case it got overwritten in the deserialization
             return result
         catch ex as Exception
