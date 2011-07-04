@@ -20,6 +20,8 @@ class Solution
             dlg.filterIndex = 1
             if dlg.showDialog == DialogResult.OK
                 .fileName = dlg.fileName to !
+            else
+                return
                 
         try
             System.IO.File.writeAllText(.fileName, fastJSON.JSON.instance.toJSON(this))
