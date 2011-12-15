@@ -23,7 +23,7 @@ class Naja is partial inherits Form
     #DONE: Add a build.bat file
     #DONE: Save as, followed by cancel complains of empty path.
     #DONE: File->Open, no All Files... filter (or similar) --> Added C# as acceptable file type.
-    #TODO: Preserve tabs instead of replacing w/ 4 spaces
+    #DONE: Preserve tabs instead of replacing w/ 4 spaces 
     #TODO: GAC Wrapper: http://blogs.msdn.com/b/junfeng/archive/2004/09/14/229649.aspx
     #TODO: ReflectionOnlyLoad for Auto Complete logic: http://msdn.microsoft.com/en-us/library/0et80c7k(v=VS.80).aspx
     #
@@ -74,6 +74,7 @@ class Naja is partial inherits Form
     var _chkBracketMatching as CheckBox
     var _chkEnableVirtualSpace as CheckBox
     var _chkShowLineNumbers as CheckBox
+    var _chkConvertTabsToSpaces as CheckBox
     var _cboCompileTarget as ComboBox
     
     var _components as System.ComponentModel.IContainer? #
@@ -178,7 +179,7 @@ class Naja is partial inherits Form
         listen editor.activeTextAreaControl.textArea.keyDown, ref _keyDown
         if _editorSettings is nil
             _editorSettings = editor.textEditorProperties
-            _editorSettings.convertTabsToSpaces = true
+            #_editorSettings.convertTabsToSpaces = true
             .onSettingsChanged
         else
             editor.textEditorProperties = _editorSettings
@@ -196,6 +197,7 @@ class Naja is partial inherits Form
         _chkBracketMatching.checked = if(_editorSettings.bracketMatchingStyle == BracketMatchingStyle.After, true,false) 
         _chkEnableVirtualSpace.checked = _editorSettings.allowCaretBeyondEOL
         _chkShowLineNumbers.checked = _editorSettings.showLineNumbers
+        _chkConvertTabsToSpaces.checked = _editorSettings.convertTabsToSpaces
         _settingsChanging = false
         
     def _keyDown(sender, e as KeyEventArgs)
@@ -241,8 +243,11 @@ class Naja is partial inherits Form
         _chkShowLineNumbers = CheckBox(parent=_tabConfig,top=135,width=200,text="Show Line Numbers",name="ShowLineNumbers")
         listen _chkShowLineNumbers.checkedChanged, ref _checkedSettingChanged
         
-        lblCompileTarget=Label(parent=_tabConfig,top=160,autoSize=true,text="Compile Target:",name="lblCompileTarget")
-        _cboCompileTarget = ComboBox(parent=_tabConfig, top=160,width=150, left=lblCompileTarget.left + lblCompileTarget.width + 5,name="_cboCompileTarget")
+        _chkConvertTabsToSpaces = CheckBox(parent=_tabConfig,top=160,width=200,text="Convert Tabs to Spaces",name="ConvertTabsToSpaces")
+        listen _chkConvertTabsToSpaces.checkedChanged, ref _checkedSettingChanged
+        
+        lblCompileTarget=Label(parent=_tabConfig,top=185,autoSize=true,text="Compile Target:",name="lblCompileTarget")
+        _cboCompileTarget = ComboBox(parent=_tabConfig, top=185,width=150, left=lblCompileTarget.left + lblCompileTarget.width + 5,name="_cboCompileTarget")
         _cboCompileTarget.items.addRange(@["WinEXE","EXE","Lib","Module"])
         _cboCompileTarget.selectedIndex = 0
 
@@ -274,6 +279,8 @@ class Naja is partial inherits Form
                 editor.allowCaretBeyondEOL = not editor.allowCaretBeyondEOL
             on "ShowLineNumbers"
                 editor.showLineNumbers = not editor.showLineNumbers
+            on "ConvertTabsToSpaces"
+                editor.convertTabsToSpaces = not editor.convertTabsToSpaces
             else
                 print "Unknown checkbox name: [chk.name]"
                 return
