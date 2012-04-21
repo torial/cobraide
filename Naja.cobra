@@ -3,6 +3,7 @@
 use Qios.DevSuite.Components
 use System.Windows.Forms from System.Windows.Forms
 use ICSharpCode.TextEditor
+use ICSharpCode.TextEditor.Gui.CompletionWindow
 use ICSharpCode.TextEditor.Document
 use System.ComponentModel
 use System.ComponentModel.Design from System.Design
@@ -208,6 +209,8 @@ class Naja is partial inherits Form
         _showIntellisense(e.keyValue to char)
         
     def _showIntellisense(value as char)
+        #completionDataProvider = CodeCompletionDataProvider()
+        
         pass #TODO : ADD INTELLISENSE
 /#
 	        ICompletionDataProvider completionDataProvider = new CodeCompletionDataProvider()
@@ -627,10 +630,11 @@ class Naja is partial inherits Form
 
 
     def saveChanges(editor as TextEditorControl) as bool
-        if String.isNullOrEmpty(editor.fileName)
-            return .saveAsChanges(editor)
         
         try
+            if String.isNullOrEmpty(editor.fileName)
+                return .saveAsChanges(editor)
+        
             editor.saveFile(editor.fileName)
             .setModifiedFlag(editor,false)
             return true
@@ -736,7 +740,37 @@ enum BackEnd
     JVM
     ObjC
     
-
+class CodeCompletionDataProvider implements ICompletionDataProvider is public
+    var _imageList as ImageList
+    pro imageList as ImageList
+        get 
+            return _imageList
+        set 
+            _imageList = value
+    
+    get preSelection as String?
+        return nil
+    
+    get defaultIndex as int
+        return -1
+    
+    cue init
+        base.init
+        _imageList = ImageList()
+        
+    def processKey(key as char) as CompletionDataProviderKeyResult
+        if key.isLetterOrDigit or key == c'_'
+            return CompletionDataProviderKeyResult.NormalKey
+        return CompletionDataProviderKeyResult.InsertionKey
+        
+    def insertAction(data as ICompletionData, textArea as TextArea, insertionOffset as int, key as char) as bool
+        textArea.caret.position = textArea.document.offsetToPosition(Math.min(insertionOffset, textArea.document.textLength))
+        return data.insertAction(textArea,key)
+        
+    def generateCompletionData(fileName as String, textArea as TextArea, charType as char) as ICompletionData[]
+        result = List<of ICompletionData>()
+        
+        return result.toArray
 
 class Program
 
