@@ -172,7 +172,7 @@ class Naja is partial inherits Form
         editor = TextEditorControl(parent=tabEditor, dock=DockStyle.Fill,name="editor",width=480)
         editor.document.foldingManager.foldingStrategy = CobraFoldingStrategy()
         editor.document.foldingManager.updateFoldings(nil,nil)
-        
+        editor.fileName = "untitled.cobra"
         _tabs.activeTabPage = tabEditor
         
         listen editor.document.documentChanged, ref _documentChanged
