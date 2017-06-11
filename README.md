@@ -16,7 +16,7 @@ Naja (a.k.a. Cobra IDE) is an Integrated Development Environment for the Cobra p
 * 0.4 - Mastermind - _ autocompletion, improved navigation, documentation_
 * 0.5 - Borg Drone - _plugin support, version control integration_
 
-![IDE](IDE.png "IDE")
+![IDE](IDE.png?raw=true)
 
 # Experimental (one-way, no loading support) Forms Designer:
 * Currently only supports simple controls (no tabs)
@@ -24,7 +24,7 @@ Naja (a.k.a. Cobra IDE) is an Integrated Development Environment for the Cobra p
 
 This is a duck tape and bailing wire feature at this point.  It will be ironed out in further releases.
 
-![IDE Designer](IDE_Designer.png "IDE Designer")
+![IDE Designer](IDE_Designer.png?raw=true)
 
 
 
